@@ -4,10 +4,7 @@
   "version": "0.1.0",
   "description": "Cross-platform DOS game frontend",
   "dependencies": [
-    {
-      "name": "sdl2",
-      "features": ["default"]
-    },
+    "sdl2",
     "sdl2-image",
     "sdl2-ttf",
     {
