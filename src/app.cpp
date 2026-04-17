@@ -600,35 +600,26 @@ void App::renderIngestOverlay()
 }
 
 
+
 // ── launchGame ────────────────────────────────────────────────────────────────
 
 void App::launchGame(const GameRecord& rec)
 {
     if (m_dosboxPath.empty() || !std::filesystem::exists(m_dosboxPath)) {
         m_launchState = LaunchState::Error;
-        m_launchError = "DOSBox not found at:
-" + m_dosboxPath.string() +
-                        "
-
-Place dosbox.exe inside the dosbox\ folder next to AutoDOS2.exe.";
+        m_launchError = "DOSBox not found.\n\nPlace dosbox.exe inside the dosbox\\ folder next to AutoDOS2.exe.";
         return;
     }
 
-    // Conf path: confsRoot/slug.conf
     std::filesystem::path confPath = m_confsRoot / (rec.slug + ".conf");
     if (!std::filesystem::exists(confPath)) {
         m_launchState = LaunchState::Error;
-        m_launchError = "No .conf found for "" + rec.title + ""
-
-" +
-                        confPath.string() + "
-
-Try removing and re-adding the game.";
+        m_launchError = "No .conf found for: " + rec.title + "\n\nTry removing and re-adding the game.";
         return;
     }
 
 #ifdef _WIN32
-    std::string cmd = """ + m_dosboxPath.string() + "" -conf "" + confPath.string() + """;
+    std::string cmd = "\"" + m_dosboxPath.string() + "\" -conf \"" + confPath.string() + "\"";
 
     STARTUPINFOA si        = { sizeof(si) };
     PROCESS_INFORMATION pi = {};
@@ -639,14 +630,17 @@ Try removing and re-adding the game.";
                         nullptr, nullptr, FALSE, 0,
                         nullptr, nullptr, &si, &pi)) {
         m_launchState = LaunchState::Error;
-        m_launchError = "Failed to launch DOSBox.
-Command: " + cmd;
+        m_launchError = "Failed to launch DOSBox.\nCommand: " + cmd;
         return;
     }
 
     m_launchState = LaunchState::Running;
 
-    // Wait for DOSBox in a detached thread, then return AutoDOS2 to front
+    // Record play
+    m_db.recordPlay(rec.id);
+    refreshLibrary();
+
+    // Wait for DOSBox in detached thread, then bring AutoDOS2 back to front
     HANDLE hProc = pi.hProcess;
     SDL_SysWMinfo wmInfo = {};
     SDL_VERSION(&wmInfo.version);
@@ -654,22 +648,17 @@ Command: " + cmd;
     if (SDL_GetWindowWMInfo(m_window, &wmInfo))
         hWnd = wmInfo.info.win.window;
 
-    // Record play in DB
-    m_db.recordPlay(rec.id);
-    refreshLibrary();
+    CloseHandle(pi.hThread);
 
     std::thread([this, hProc, hWnd]() {
         WaitForSingleObject(hProc, INFINITE);
         CloseHandle(hProc);
         m_launchState = LaunchState::Idle;
-        // Bring AutoDOS2 back to front
         if (hWnd) {
             SetForegroundWindow(hWnd);
             ShowWindow(hWnd, SW_RESTORE);
         }
     }).detach();
-
-    CloseHandle(pi.hThread);
 #else
     (void)rec;
     m_launchState = LaunchState::Error;
@@ -682,22 +671,22 @@ Command: " + cmd;
 void App::renderLaunchError()
 {
     const ImGuiIO& io = ImGui::GetIO();
-    ImGui::SetNextWindowPos({io.DisplaySize.x*0.5f, io.DisplaySize.y*0.5f},
-        ImGuiCond_Always, {0.5f,0.5f});
-    ImGui::SetNextWindowSize({400,160});
+    ImGui::SetNextWindowPos({io.DisplaySize.x * 0.5f, io.DisplaySize.y * 0.5f},
+        ImGuiCond_Always, {0.5f, 0.5f});
+    ImGui::SetNextWindowSize({400, 160});
     ImGui::SetNextWindowBgAlpha(0.95f);
     ImGui::Begin("##launcherr", nullptr,
-        ImGuiWindowFlags_NoDecoration|ImGuiWindowFlags_NoMove|
+        ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove |
         ImGuiWindowFlags_NoSavedSettings);
 
-    ImGui::TextColored({1.0f,0.4f,0.4f,1.0f}, "Launch Error");
+    ImGui::TextColored({1.0f, 0.4f, 0.4f, 1.0f}, "Launch Error");
     ImGui::Separator();
     ImGui::Spacing();
     ImGui::PushTextWrapPos(380);
     ImGui::TextWrapped("%s", m_launchError.c_str());
     ImGui::PopTextWrapPos();
     ImGui::Spacing();
-    if (ImGui::Button("OK", {80,0}))
+    if (ImGui::Button("OK", {80, 0}))
         m_launchState = LaunchState::Idle;
 
     ImGui::End();
