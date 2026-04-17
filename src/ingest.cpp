@@ -90,10 +90,15 @@ bool GameDatabase::load(const fs::path& jsonPath)
         e.title       = g.value("title",        "");
         e.exe         = g.value("exe",           "");
         e.workDir     = g.value("work_dir",      "");
-        e.cycles      = g.value("cycles",        "max limit 80000");
-        // cycles can be string or number
-        if (g.contains("cycles") && g["cycles"].is_number())
-            e.cycles  = std::to_string(g["cycles"].get<int>());
+        // cycles can be string OR integer in games.json
+        if (g.contains("cycles")) {
+            const auto& cyc = g["cycles"];
+            if (cyc.is_string())       e.cycles = cyc.get<std::string>();
+            else if (cyc.is_number())  e.cycles = std::to_string(cyc.get<int>());
+            else                       e.cycles = "max limit 80000";
+        } else {
+            e.cycles = "max limit 80000";
+        }
         e.memsize     = g.value("memsize",       16);
         e.ems         = g.value("ems",           true);
         e.xms         = g.value("xms",           true);
