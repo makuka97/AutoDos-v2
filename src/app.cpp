@@ -365,8 +365,9 @@ void App::renderTopBar(float winW)
     ImGui::SetCursorPos({14,16});
     ImGui::TextColored(ACCENT,"AutoDOS2");
     ImGui::SameLine(); ImGui::SetCursorPosY(16);
-    ImGui::TextDisabled("v%d.%d  |  %d games",
-        AUTODOS2_VERSION_MAJOR,AUTODOS2_VERSION_MINOR,(int)m_allGames.size());
+    ImGui::TextDisabled("v%d.%d  |  %d games  |  DB: %d entries",
+        AUTODOS2_VERSION_MAJOR,AUTODOS2_VERSION_MINOR,
+        (int)m_allGames.size(), m_gameJson.count());
 
     const float searchW=260.0f;
     ImGui::SetCursorPos({winW-searchW-14,14});
