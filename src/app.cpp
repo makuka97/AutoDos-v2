@@ -22,51 +22,44 @@
 
 namespace AutoDOS2 {
 
-// ── Accent colour ─────────────────────────────────────────────────────────────
-static constexpr ImVec4 ACCENT     = {0.314f, 0.784f, 0.471f, 1.0f}; // #50C878
-static constexpr ImU32  ACCENT32   = IM_COL32(80, 200, 120, 255);
-static constexpr ImU32  ACCENT32DIM= IM_COL32(60, 140, 90, 180);
+static constexpr ImVec4 ACCENT      = {0.314f, 0.784f, 0.471f, 1.0f};
+static constexpr ImU32  ACCENT32    = IM_COL32(80, 200, 120, 255);
+static constexpr ImU32  ACCENT32DIM = IM_COL32(60, 140, 90, 160);
 
-// ── Theme ─────────────────────────────────────────────────────────────────────
 static void applyAutoDOSTheme()
 {
     ImGuiStyle& s = ImGui::GetStyle();
-    s.WindowRounding    = 0.0f;
-    s.ChildRounding     = 6.0f;
-    s.FrameRounding     = 5.0f;
-    s.ScrollbarRounding = 4.0f;
-    s.GrabRounding      = 4.0f;
-    s.PopupRounding     = 6.0f;
-    s.FramePadding      = {10, 6};
-    s.ItemSpacing       = {8, 6};
-    s.ScrollbarSize     = 10.0f;
-    s.WindowBorderSize  = 0.0f;
+    s.WindowRounding     = 0.0f;
+    s.ChildRounding      = 6.0f;
+    s.FrameRounding      = 5.0f;
+    s.ScrollbarRounding  = 4.0f;
+    s.GrabRounding       = 4.0f;
+    s.PopupRounding      = 6.0f;
+    s.FramePadding       = {10, 6};
+    s.ItemSpacing        = {8, 6};
+    s.ScrollbarSize      = 10.0f;
+    s.WindowBorderSize   = 0.0f;
 
     ImVec4* c = s.Colors;
-    c[ImGuiCol_WindowBg]         = {0.071f, 0.071f, 0.094f, 1.00f}; // #121218
-    c[ImGuiCol_ChildBg]          = {0.090f, 0.090f, 0.118f, 1.00f};
-    c[ImGuiCol_PopupBg]          = {0.110f, 0.110f, 0.141f, 0.97f};
-    c[ImGuiCol_Border]           = {0.149f, 0.149f, 0.196f, 1.00f};
-    c[ImGuiCol_FrameBg]          = {0.130f, 0.130f, 0.165f, 1.00f};
-    c[ImGuiCol_FrameBgHovered]   = {0.157f, 0.220f, 0.180f, 1.00f};
-    c[ImGuiCol_FrameBgActive]    = {0.196f, 0.282f, 0.220f, 1.00f};
-    c[ImGuiCol_TitleBg]          = {0.055f, 0.055f, 0.075f, 1.00f};
-    c[ImGuiCol_TitleBgActive]    = {0.055f, 0.055f, 0.075f, 1.00f};
-    c[ImGuiCol_MenuBarBg]        = {0.055f, 0.055f, 0.075f, 1.00f};
-    c[ImGuiCol_ScrollbarBg]      = {0.055f, 0.055f, 0.075f, 1.00f};
-    c[ImGuiCol_ScrollbarGrab]    = {0.220f, 0.220f, 0.280f, 1.00f};
+    c[ImGuiCol_WindowBg]            = {0.071f, 0.071f, 0.094f, 1.00f};
+    c[ImGuiCol_ChildBg]             = {0.090f, 0.090f, 0.118f, 1.00f};
+    c[ImGuiCol_PopupBg]             = {0.110f, 0.110f, 0.141f, 0.97f};
+    c[ImGuiCol_Border]              = {0.149f, 0.149f, 0.196f, 1.00f};
+    c[ImGuiCol_FrameBg]             = {0.130f, 0.130f, 0.165f, 1.00f};
+    c[ImGuiCol_FrameBgHovered]      = {0.157f, 0.220f, 0.180f, 1.00f};
+    c[ImGuiCol_FrameBgActive]       = {0.196f, 0.282f, 0.220f, 1.00f};
+    c[ImGuiCol_TitleBg]             = {0.055f, 0.055f, 0.075f, 1.00f};
+    c[ImGuiCol_TitleBgActive]       = {0.055f, 0.055f, 0.075f, 1.00f};
+    c[ImGuiCol_ScrollbarBg]         = {0.055f, 0.055f, 0.075f, 1.00f};
+    c[ImGuiCol_ScrollbarGrab]       = {0.220f, 0.220f, 0.280f, 1.00f};
     c[ImGuiCol_ScrollbarGrabHovered]= {0.314f, 0.784f, 0.471f, 0.6f};
-    c[ImGuiCol_CheckMark]        = ACCENT;
-    c[ImGuiCol_SliderGrab]       = ACCENT;
-    c[ImGuiCol_Button]           = {0.125f, 0.204f, 0.157f, 1.00f};
-    c[ImGuiCol_ButtonHovered]    = {0.200f, 0.322f, 0.247f, 1.00f};
-    c[ImGuiCol_ButtonActive]     = ACCENT;
-    c[ImGuiCol_Header]           = {0.125f, 0.204f, 0.157f, 1.00f};
-    c[ImGuiCol_HeaderHovered]    = {0.200f, 0.322f, 0.247f, 1.00f};
-    c[ImGuiCol_HeaderActive]     = ACCENT;
-    c[ImGuiCol_Text]             = {0.863f, 0.863f, 0.863f, 1.00f};
-    c[ImGuiCol_TextDisabled]     = {0.431f, 0.431f, 0.471f, 1.00f};
-    c[ImGuiCol_Separator]        = {0.149f, 0.149f, 0.196f, 1.00f};
+    c[ImGuiCol_CheckMark]           = ACCENT;
+    c[ImGuiCol_Button]              = {0.125f, 0.204f, 0.157f, 1.00f};
+    c[ImGuiCol_ButtonHovered]       = {0.200f, 0.322f, 0.247f, 1.00f};
+    c[ImGuiCol_ButtonActive]        = ACCENT;
+    c[ImGuiCol_Text]                = {0.863f, 0.863f, 0.863f, 1.00f};
+    c[ImGuiCol_TextDisabled]        = {0.431f, 0.431f, 0.471f, 1.00f};
+    c[ImGuiCol_Separator]           = {0.149f, 0.149f, 0.196f, 1.00f};
 }
 
 // ── CoverCache ────────────────────────────────────────────────────────────────
@@ -75,19 +68,12 @@ CoverCache::~CoverCache() { clear(); }
 
 SDL_Texture* CoverCache::makePlaceholder()
 {
-    // 180x187 placeholder — dark card with a subtle "no image" look
     constexpr int W = 180, H = 187;
-    SDL_Surface* surf = SDL_CreateRGBSurfaceWithFormat(0, W, H, 32,
-                                                        SDL_PIXELFORMAT_RGBA32);
+    SDL_Surface* surf = SDL_CreateRGBSurfaceWithFormat(0, W, H, 32, SDL_PIXELFORMAT_RGBA32);
     if (!surf) return nullptr;
-
-    // Background
     SDL_FillRect(surf, nullptr, SDL_MapRGB(surf->format, 22, 28, 38));
-
-    // Draw a simple faint box in the centre
-    SDL_Rect border = {W/4, H/4, W/2, H/2};
-    SDL_FillRect(surf, &border, SDL_MapRGB(surf->format, 30, 38, 52));
-
+    SDL_Rect inner = {W/4, H/4, W/2, H/2};
+    SDL_FillRect(surf, &inner, SDL_MapRGB(surf->format, 30, 40, 54));
     SDL_Texture* tex = SDL_CreateTextureFromSurface(m_renderer, surf);
     SDL_FreeSurface(surf);
     return tex;
@@ -97,27 +83,19 @@ SDL_Texture* CoverCache::get(const std::string& path)
 {
     auto it = m_cache.find(path);
     if (it != m_cache.end()) return it->second;
-
     SDL_Texture* tex = nullptr;
     if (!path.empty()) {
         SDL_Surface* surf = IMG_Load(path.c_str());
-        if (surf) {
-            tex = SDL_CreateTextureFromSurface(m_renderer, surf);
-            SDL_FreeSurface(surf);
-        }
+        if (surf) { tex = SDL_CreateTextureFromSurface(m_renderer, surf); SDL_FreeSurface(surf); }
     }
-    if (!tex) {
-        if (!m_placeholder) m_placeholder = makePlaceholder();
-        tex = m_placeholder;
-    }
+    if (!tex) { if (!m_placeholder) m_placeholder = makePlaceholder(); tex = m_placeholder; }
     m_cache[path] = tex;
     return tex;
 }
 
 void CoverCache::clear()
 {
-    for (auto& [k, v] : m_cache)
-        if (v && v != m_placeholder) SDL_DestroyTexture(v);
+    for (auto& [k, v] : m_cache) if (v && v != m_placeholder) SDL_DestroyTexture(v);
     m_cache.clear();
     if (m_placeholder) { SDL_DestroyTexture(m_placeholder); m_placeholder = nullptr; }
 }
@@ -150,23 +128,20 @@ bool App::init()
         m_renderer = SDL_CreateRenderer(m_window, -1, SDL_RENDERER_SOFTWARE);
     if (!m_renderer) return false;
 
-    SDL_RenderSetLogicalSize(m_renderer, WINDOW_W, WINDOW_H);
-
+    // Do NOT set logical size — let it track actual window size so resize works
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
     ImGuiIO& io = ImGui::GetIO();
     io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
-    io.IniFilename = nullptr; // don't write imgui.ini
+    io.IniFilename = nullptr;
     applyAutoDOSTheme();
     ImGui_ImplSDL2_InitForSDLRenderer(m_window, m_renderer);
     ImGui_ImplSDLRenderer2_Init(m_renderer);
 
     m_covers.setRenderer(m_renderer);
-
     auto dbPath = getDataDir() / "autodos2.db";
     if (!m_db.open(dbPath)) return false;
 
-    // Seed 10 dummy games for Phase 03 testing
     if (m_db.count() == 0) {
         const char* titles[] = {
             "Duke Nukem 3D","Quake","Doom II","Daggerfall","Heretic",
@@ -177,8 +152,7 @@ bool App::init()
             "hexen","blood","shadow","descent","terminal"
         };
         for (int i = 0; i < 10; ++i) {
-            GameRecord r; r.title = titles[i]; r.slug = slugs[i];
-            m_db.insert(r);
+            GameRecord r; r.title = titles[i]; r.slug = slugs[i]; m_db.insert(r);
         }
     }
 
@@ -209,15 +183,9 @@ void App::applySearch()
     if (!ok) m_selected = -1;
 }
 
-// ── Loop ──────────────────────────────────────────────────────────────────────
-
 void App::run()
 {
-    while (m_running) {
-        processEvents();
-        update();
-        render();
-    }
+    while (m_running) { processEvents(); update(); render(); }
 }
 
 void App::processEvents()
@@ -226,14 +194,9 @@ void App::processEvents()
     while (SDL_PollEvent(&e)) {
         ImGui_ImplSDL2_ProcessEvent(&e);
         if (e.type == SDL_QUIT) m_running = false;
-        if (e.type == SDL_WINDOWEVENT && e.window.event == SDL_WINDOWEVENT_CLOSE)
-            m_running = false;
-        if (e.type == SDL_KEYDOWN && e.key.keysym.sym == SDLK_F1)
-            m_showDemoWindow = !m_showDemoWindow;
-        if (e.type == SDL_DROPFILE) {
-            std::fprintf(stdout, "[AutoDOS2] Drop: %s\n", e.drop.file);
-            SDL_free(e.drop.file);
-        }
+        if (e.type == SDL_WINDOWEVENT && e.window.event == SDL_WINDOWEVENT_CLOSE) m_running = false;
+        if (e.type == SDL_KEYDOWN && e.key.keysym.sym == SDLK_F1) m_showDemoWindow = !m_showDemoWindow;
+        if (e.type == SDL_DROPFILE) { std::fprintf(stdout,"[Drop] %s\n",e.drop.file); SDL_free(e.drop.file); }
     }
 }
 
@@ -243,77 +206,67 @@ void App::render()
 {
     SDL_SetRenderDrawColor(m_renderer, 18, 18, 24, 255);
     SDL_RenderClear(m_renderer);
-
     ImGui_ImplSDLRenderer2_NewFrame();
     ImGui_ImplSDL2_NewFrame();
     ImGui::NewFrame();
-
     if (m_showDemoWindow) ImGui::ShowDemoWindow(&m_showDemoWindow);
     renderImGui();
-
     ImGui::Render();
     ImGui_ImplSDLRenderer2_RenderDrawData(ImGui::GetDrawData(), m_renderer);
     SDL_RenderPresent(m_renderer);
 }
 
 // ── Layout ────────────────────────────────────────────────────────────────────
-//
-//  ┌─────────────────────────────────────────────┐
-//  │  Top bar: title + search                    │
-//  ├──────────┬──────────────────────────────────┤
-//  │ Sidebar  │  Game grid (scrollable)          │
-//  │ (200px)  │                                  │
-//  ├──────────┴──────────────────────────────────┤
-//  │  Bottom bar: Launch | Add Zip | Delete      │
-//  └─────────────────────────────────────────────┘
 
 void App::renderImGui()
 {
     const ImGuiIO& io = ImGui::GetIO();
-    ImGui::SetNextWindowPos({0, 0});
+    ImGui::SetNextWindowPos({0,0});
     ImGui::SetNextWindowSize(io.DisplaySize);
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, {0, 0});
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, {0,0});
     ImGui::Begin("##root", nullptr,
         ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove |
         ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoBringToFrontOnFocus);
     ImGui::PopStyleVar();
 
-    renderTopBar();
-
-    // ── Middle: sidebar + grid ────────────────────────────────────────────────
+    const float topH    = 56.0f;
     const float bottomH = 50.0f;
-    const float midH    = io.DisplaySize.y - 56.0f - bottomH;
+    const float midH    = io.DisplaySize.y - topH - bottomH;
 
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, {0, 0});
-    ImGui::BeginChild("##middle", {0, midH}, false, ImGuiWindowFlags_NoScrollbar);
+    renderTopBar(io.DisplaySize.x);
+
+    // Middle row: sidebar | grid
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, {0,0});
+    ImGui::BeginChild("##mid", {0, midH}, false, ImGuiWindowFlags_NoScrollbar);
     ImGui::PopStyleVar();
-
     renderSidebar();
     ImGui::SameLine(0, 0);
     renderGrid();
-
     ImGui::EndChild();
 
-    renderBottomBar();
+    renderBottomBar(io.DisplaySize.x);
     ImGui::End();
 }
 
 // ── Top bar ───────────────────────────────────────────────────────────────────
 
-void App::renderTopBar()
+void App::renderTopBar(float winW)
 {
     ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4{0.055f, 0.055f, 0.075f, 1.0f});
-    ImGui::BeginChild("##topbar", {0, 56}, false, ImGuiWindowFlags_NoScrollbar);
+    ImGui::BeginChild("##top", {0, 56}, false, ImGuiWindowFlags_NoScrollbar);
     ImGui::PopStyleColor();
 
-    ImGui::SetCursorPos({14, 12});
+    // Title left
+    ImGui::SetCursorPos({14, 16});
     ImGui::TextColored(ACCENT, "AutoDOS2");
     ImGui::SameLine();
+    ImGui::SetCursorPosY(16);
     ImGui::TextDisabled("v%d.%d", AUTODOS2_VERSION_MAJOR, AUTODOS2_VERSION_MINOR);
 
-    // Search bar — right-aligned
+    // Search right — use TableNextColumn trick: just SetCursorPosX
     const float searchW = 260.0f;
-    ImGui::SameLine(ImGui::GetWindowWidth() - searchW - 14);
+    const float searchX = winW - searchW - 14.0f;
+    ImGui::SetCursorPos({searchX, 14});
     ImGui::SetNextItemWidth(searchW);
     ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 20.0f);
     if (ImGui::InputTextWithHint("##search", "Search Games...",
@@ -323,11 +276,10 @@ void App::renderTopBar()
 
     ImGui::EndChild();
 
-    // Divider line
+    // Bottom divider
     ImDrawList* dl = ImGui::GetWindowDrawList();
     ImVec2 p = ImGui::GetCursorScreenPos();
-    dl->AddLine(p, {p.x + ImGui::GetWindowWidth(), p.y},
-        IM_COL32(38, 38, 60, 255), 1.0f);
+    dl->AddLine(p, {p.x + winW, p.y}, IM_COL32(38,38,60,255), 1.0f);
 }
 
 // ── Sidebar ───────────────────────────────────────────────────────────────────
@@ -335,38 +287,33 @@ void App::renderTopBar()
 void App::renderSidebar()
 {
     const float sideW = 200.0f;
-    ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4{0.055f, 0.060f, 0.080f, 1.0f});
+    ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4{0.055f,0.060f,0.080f,1.0f});
     ImGui::BeginChild("##sidebar", {sideW, 0}, false, ImGuiWindowFlags_NoScrollbar);
     ImGui::PopStyleColor();
 
-    ImGui::SetCursorPos({0, 0});
-
-    // Selected game detail panel
     const GameRecord* sel = nullptr;
     for (auto& g : m_filtered) if (g.id == m_selected) { sel = &g; break; }
 
     if (sel) {
-        // Cover art
+        // Large cover art
         SDL_Texture* tex = m_covers.get(sel->cover_path);
         if (tex) {
-            ImGui::SetCursorPosX(10);
-            ImGui::SetCursorPosY(12);
-            float imgW = sideW - 20.0f;
-            float imgH = imgW * (4.0f / 3.0f); // 4:3 ratio
+            const float imgW = sideW - 16.0f;
+            const float imgH = imgW * 1.2f;
+            ImGui::SetCursorPos({8, 10});
             ImGui::Image(reinterpret_cast<ImTextureID>(tex), {imgW, imgH});
         }
-
         ImGui::SetCursorPosX(10);
         ImGui::PushTextWrapPos(sideW - 10);
         ImGui::TextColored(ACCENT, "%s", sel->title.c_str());
         ImGui::Spacing();
-        ImGui::TextDisabled("Platform: %s", sel->platform.c_str());
+        if (!sel->platform.empty())
+            ImGui::TextDisabled("Platform: %s", sel->platform.c_str());
         ImGui::TextDisabled("Played: %d times", sel->play_count);
         if (!sel->last_played.empty())
-            ImGui::TextDisabled("Last: %s", sel->last_played.substr(0,10).c_str());
+            ImGui::TextDisabled("Last: %.10s", sel->last_played.c_str());
         ImGui::PopTextWrapPos();
     } else {
-        // No selection — show library stats
         ImGui::SetCursorPos({10, 16});
         ImGui::TextColored(ACCENT, "Library");
         ImGui::SetCursorPosX(10);
@@ -376,89 +323,83 @@ void App::renderSidebar()
         ImGui::TextDisabled("Drag a DOS zip\nonto the window\nto add a game.");
     }
 
-    // Sidebar right border
+    // Right border
     ImDrawList* dl = ImGui::GetWindowDrawList();
     ImVec2 tl = ImGui::GetWindowPos();
-    float h   = ImGui::GetWindowHeight();
-    dl->AddLine({tl.x + sideW - 1, tl.y}, {tl.x + sideW - 1, tl.y + h},
-        IM_COL32(38, 38, 60, 255), 1.0f);
+    float  h  = ImGui::GetWindowHeight();
+    dl->AddLine({tl.x+sideW-1, tl.y}, {tl.x+sideW-1, tl.y+h},
+        IM_COL32(38,38,60,255), 1.0f);
 
     ImGui::EndChild();
 }
 
 // ── Game grid ─────────────────────────────────────────────────────────────────
+// Key fix: draw everything via DrawList ONLY — never call ImGui::Image inside
+// a column after InvisibleButton, which shifts the layout cursor.
 
 void App::renderGrid()
 {
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, {CARD_PAD, CARD_PAD});
-    ImGui::BeginChild("##grid", {0, 0}, false, ImGuiWindowFlags_None);
+    ImGui::BeginChild("##grid", {0,0}, false);
     ImGui::PopStyleVar();
 
     const float availW = ImGui::GetContentRegionAvail().x;
     const int   cols   = std::max(1, (int)((availW + CARD_PAD) / (CARD_W + CARD_PAD)));
-
-    ImDrawList* dl     = ImGui::GetWindowDrawList();
     const float imgH   = CARD_H * 0.76f;
     const float lblH   = CARD_H - imgH;
+
+    ImDrawList* dl = ImGui::GetWindowDrawList();
 
     for (int i = 0; i < (int)m_filtered.size(); ++i) {
         const GameRecord& g   = m_filtered[i];
         const bool        sel = (g.id == m_selected);
 
-        // New row
         if (i % cols != 0) ImGui::SameLine(0, CARD_PAD);
 
         ImGui::PushID(g.id);
 
-        // Reserve space for the card using a dummy, get its top-left
+        // InvisibleButton defines the card's rect and handles hover/click.
+        // We record its screen position BEFORE calling it, then draw everything
+        // via DrawList so the cursor is never moved by Image calls.
         ImVec2 cardPos = ImGui::GetCursorScreenPos();
         ImGui::InvisibleButton("##card", {CARD_W, CARD_H});
-        bool hovered = ImGui::IsItemHovered();
-        bool clicked = ImGui::IsItemClicked();
-        if (clicked) m_selected = sel ? -1 : g.id;
+        const bool hovered = ImGui::IsItemHovered();
+        if (ImGui::IsItemClicked()) m_selected = sel ? -1 : g.id;
 
-        // ── Card background ───────────────────────────────────────────────────
+        // Card background
         ImU32 bgCol = sel
             ? IM_COL32(32, 58, 42, 255)
-            : hovered ? IM_COL32(28, 38, 36, 255)
+            : hovered ? IM_COL32(28, 38, 38, 255)
                       : IM_COL32(18, 22, 30, 255);
-        dl->AddRectFilled(cardPos, {cardPos.x+CARD_W, cardPos.y+CARD_H},
-            bgCol, 8.0f);
+        dl->AddRectFilled(cardPos, {cardPos.x+CARD_W, cardPos.y+CARD_H}, bgCol, 8.0f);
 
-        // ── Cover image ───────────────────────────────────────────────────────
+        // Cover image — drawn via DrawList directly, NOT via ImGui::Image
         SDL_Texture* tex = m_covers.get(g.cover_path);
         if (tex) {
-            // Use ImGui::SetCursorScreenPos + Image to draw inside the card
-            ImGui::SetCursorScreenPos(cardPos);
-            ImGui::Image(reinterpret_cast<ImTextureID>(tex),
-                {CARD_W, imgH}, {0,0}, {1,1},
-                {1,1,1,1}, {0,0,0,0});
+            dl->AddImage(
+                reinterpret_cast<ImTextureID>(tex),
+                cardPos,
+                {cardPos.x + CARD_W, cardPos.y + imgH}
+            );
         }
 
-        // ── Title gradient overlay ────────────────────────────────────────────
-        ImVec2 lblTL = {cardPos.x,        cardPos.y + imgH - 20.0f};
-        ImVec2 lblBR = {cardPos.x+CARD_W, cardPos.y + CARD_H};
-        dl->AddRectFilledMultiColor(lblTL, lblBR,
+        // Gradient overlay at bottom of image
+        ImVec2 gradTL = {cardPos.x,       cardPos.y + imgH - 24.0f};
+        ImVec2 gradBR = {cardPos.x+CARD_W, cardPos.y + CARD_H};
+        dl->AddRectFilledMultiColor(gradTL, gradBR,
             IM_COL32(0,0,0,0), IM_COL32(0,0,0,0),
-            IM_COL32(0,0,0,210), IM_COL32(0,0,0,210));
+            IM_COL32(0,0,0,220), IM_COL32(0,0,0,220));
 
         // Title text
-        const char* title = g.title.c_str();
-        ImVec2 textSz = ImGui::CalcTextSize(title, nullptr, false, CARD_W - 10.0f);
-        ImVec2 textPos = {
-            cardPos.x + 8.0f,
-            cardPos.y + CARD_H - lblH + (lblH - textSz.y) * 0.3f
-        };
-        dl->AddText(nullptr, 0, textPos, IM_COL32(230, 230, 230, 255),
-            title, nullptr, CARD_W - 10.0f);
+        ImVec2 textPos = {cardPos.x + 8.0f, cardPos.y + imgH + (lblH - 14.0f)*0.35f};
+        dl->AddText(nullptr, 0, textPos, IM_COL32(225,225,225,255),
+            g.title.c_str(), nullptr, CARD_W - 10.0f);
 
-        // ── Border ────────────────────────────────────────────────────────────
+        // Border
         if (sel)
-            dl->AddRect(cardPos, {cardPos.x+CARD_W, cardPos.y+CARD_H},
-                ACCENT32, 8.0f, 0, 2.5f);
+            dl->AddRect(cardPos, {cardPos.x+CARD_W, cardPos.y+CARD_H}, ACCENT32, 8.0f, 0, 2.5f);
         else if (hovered)
-            dl->AddRect(cardPos, {cardPos.x+CARD_W, cardPos.y+CARD_H},
-                ACCENT32DIM, 8.0f, 0, 1.5f);
+            dl->AddRect(cardPos, {cardPos.x+CARD_W, cardPos.y+CARD_H}, ACCENT32DIM, 8.0f, 0, 1.5f);
 
         ImGui::PopID();
     }
@@ -478,17 +419,15 @@ void App::renderGrid()
 
 // ── Bottom bar ────────────────────────────────────────────────────────────────
 
-void App::renderBottomBar()
+void App::renderBottomBar(float winW)
 {
-    ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4{0.055f, 0.055f, 0.075f, 1.0f});
-    ImGui::BeginChild("##bottombar", {0, 0}, false, ImGuiWindowFlags_NoScrollbar);
+    ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4{0.055f,0.055f,0.075f,1.0f});
+    ImGui::BeginChild("##bot", {0,0}, false, ImGuiWindowFlags_NoScrollbar);
     ImGui::PopStyleColor();
 
-    // Top divider
     ImDrawList* dl = ImGui::GetWindowDrawList();
     ImVec2 p = ImGui::GetWindowPos();
-    dl->AddLine(p, {p.x + ImGui::GetWindowWidth(), p.y},
-        IM_COL32(38, 38, 60, 255), 1.0f);
+    dl->AddLine(p, {p.x+winW, p.y}, IM_COL32(38,38,60,255), 1.0f);
 
     ImGui::SetCursorPos({10, 10});
 
@@ -497,25 +436,21 @@ void App::renderBottomBar()
     const bool hasSel = (sel != nullptr);
 
     // Launch
-    ImGui::PushStyleColor(ImGuiCol_Button,        IM_COL32(30, 70, 45, 255));
-    ImGui::PushStyleColor(ImGuiCol_ButtonHovered,  IM_COL32(50, 110, 70, 255));
-    ImGui::PushStyleColor(ImGuiCol_ButtonActive,   IM_COL32(80, 200, 120, 255));
+    ImGui::PushStyleColor(ImGuiCol_Button,       IM_COL32(30,70,45,255));
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, IM_COL32(50,110,70,255));
+    ImGui::PushStyleColor(ImGuiCol_ButtonActive,  IM_COL32(80,200,120,255));
     if (!hasSel) ImGui::BeginDisabled();
     if (ImGui::Button("  Launch  ")) { /* Phase 05 */ }
     if (!hasSel) ImGui::EndDisabled();
     ImGui::PopStyleColor(3);
 
     ImGui::SameLine(0, 8);
-
-    // Add Zip
     if (ImGui::Button("  Add Zip  ")) { /* Phase 04 */ }
 
     ImGui::SameLine(0, 8);
-
-    // Select/Delete
-    ImGui::PushStyleColor(ImGuiCol_Button,        IM_COL32(70, 30, 30, 255));
-    ImGui::PushStyleColor(ImGuiCol_ButtonHovered,  IM_COL32(110, 50, 50, 255));
-    ImGui::PushStyleColor(ImGuiCol_ButtonActive,   IM_COL32(200, 80, 80, 255));
+    ImGui::PushStyleColor(ImGuiCol_Button,       IM_COL32(70,30,30,255));
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, IM_COL32(110,50,50,255));
+    ImGui::PushStyleColor(ImGuiCol_ButtonActive,  IM_COL32(200,80,80,255));
     if (!hasSel) ImGui::BeginDisabled();
     if (ImGui::Button("  Select/Delete  ")) {
         if (sel) { m_db.remove(sel->id); m_selected = -1; refreshLibrary(); }
@@ -523,15 +458,13 @@ void App::renderBottomBar()
     if (!hasSel) ImGui::EndDisabled();
     ImGui::PopStyleColor(3);
 
-    // Status text right side
     ImGui::SameLine();
     if (sel)
         ImGui::TextDisabled("  %s", sel->title.c_str());
     else
         ImGui::TextDisabled("  Drag a DOS zip to add  |  Double-click to launch");
 
-    // FPS
-    ImGui::SameLine(ImGui::GetWindowWidth() - 70);
+    ImGui::SameLine(winW - 70);
     ImGui::TextDisabled("%.0f fps", ImGui::GetIO().Framerate);
 
     ImGui::EndChild();
