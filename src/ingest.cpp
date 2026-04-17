@@ -480,6 +480,15 @@ AnalyzeResult Ingestor::ingest(const fs::path& archivePath, ProgressFn progress)
 
     if (progress) progress(80);
 
+    // Step 2b: auto-copy DOS4GW.EXE — required by many 32-bit DOS games
+    // (Doom, Quake, Duke3D, etc.). Games that don't need it will ignore it.
+    if (!m_dos4gwPath.empty()) {
+        std::error_code ec;
+        fs::path dst = extractDir / "DOS4GW.EXE";
+        if (!fs::exists(dst))
+            fs::copy_file(m_dos4gwPath, dst, ec);
+    }
+
     // Step 3: for scored/unknown matches, rescan extracted dir to confirm exe
     if (result.source == "scored" || result.source == "unknown") {
         auto candidates = scanExtractedDir(extractDir, archivePath.stem().string());
