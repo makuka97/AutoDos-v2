@@ -1,21 +1,25 @@
 #pragma once
 
 #include "gamedb.h"
+#include "ingest.h"
 
 #include <SDL.h>
+#include <atomic>
+#include <mutex>
 #include <string>
-#include <vector>
+#include <thread>
 #include <unordered_map>
+#include <vector>
 
 namespace AutoDOS2 {
 
 constexpr int   WINDOW_W   = 900;
 constexpr int   WINDOW_H   = 700;
-constexpr int   TARGET_FPS = 60;
 constexpr float CARD_W     = 180.0f;
 constexpr float CARD_H     = 240.0f;
 constexpr float CARD_PAD   = 12.0f;
 
+// ── CoverCache ────────────────────────────────────────────────────────────────
 class CoverCache {
 public:
     CoverCache() = default;
@@ -30,6 +34,18 @@ private:
     SDL_Texture*  makePlaceholder();
 };
 
+// ── IngestStatus — shared between worker thread and UI ───────────────────────
+struct IngestStatus {
+    std::atomic<bool>  busy    {false};
+    std::atomic<int>   progress{0};
+    std::mutex         mtx;
+    std::string        message;
+    std::string        lastError;
+    bool               resultReady {false};
+    AnalyzeResult      result;
+};
+
+// ── App ───────────────────────────────────────────────────────────────────────
 class App {
 public:
     App();
@@ -41,16 +57,27 @@ private:
     SDL_Window*   m_window   = nullptr;
     SDL_Renderer* m_renderer = nullptr;
 
+    // DB + library
     GameDB                  m_db;
+    GameDatabase            m_gameJson;
+    Ingestor                m_ingestor;
     std::vector<GameRecord> m_allGames;
     std::vector<GameRecord> m_filtered;
-    int                     m_selected    = -1;
-    CoverCache              m_covers;
+    int                     m_selected = -1;
 
+    // Cover art
+    CoverCache m_covers;
+
+    // Ingest worker
+    IngestStatus  m_ingest;
+    std::thread   m_ingestThread;
+
+    // UI state
     bool m_running        = false;
     bool m_showDemoWindow = false;
     char m_searchBuf[256] = {};
 
+    // Internals
     void processEvents();
     void update();
     void render();
@@ -59,8 +86,10 @@ private:
     void renderSidebar();
     void renderGrid();
     void renderBottomBar(float winW);
+    void renderIngestOverlay();
     void applySearch();
     void refreshLibrary();
+    void startIngest(const std::string& path);
     void cleanup();
 };
 
