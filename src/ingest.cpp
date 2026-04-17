@@ -331,10 +331,27 @@ AnalyzeResult Ingestor::analyze(const fs::path& archivePath) const
             }
         }
 
-        // ── Match 2: archive stem → slugify → JSON key ────────────────────────
+        // ── Match 2: archive stem → slugify → JSON key (exact then prefix) ────
         std::string archiveStem = archivePath.stem().string();
         std::string slug        = slugify(archiveStem);
         const GameEntry* entry  = m_db->bySlug(slug);
+
+        // Pass 2b: prefix match — "fatalracingdoswin" starts with "fatalracing"
+        if (!entry && slug.size() >= 5) {
+            size_t bestLen = 4;
+            const GameEntry* bestEntry = nullptr;
+            for (auto& [key, val] : m_db->allEntries()) {
+                if (slug.find(key) == 0 && key.size() > bestLen) {
+                    bestLen  = key.size();
+                    bestEntry = &val;
+                } else if (key.find(slug) == 0 && slug.size() > bestLen) {
+                    bestLen  = slug.size();
+                    bestEntry = &val;
+                }
+            }
+            entry = bestEntry;
+        }
+
         if (entry) {
             result.success    = true;
             result.slug       = entry->slug;
@@ -411,20 +428,35 @@ bool Ingestor::writeDosboxConf(const fs::path& extractedDir,
         if (sl != std::string::npos) exeName = exeName.substr(sl + 1);
     }
 
-    // Walk extracted dir to find where the exe actually lives
+    // Walk extracted dir to find where the exe actually lives.
+    // If the DB exe name is not found on disk (version mismatch),
+    // fall back to the best scored exe found on disk.
     std::string mountDir = extractedDir.string();
     {
         std::error_code ec;
         std::string exeUp = toUpper(exeName);
-        for (auto& f : fs::recursive_directory_iterator(extractedDir, ec)) {
+        bool found = false;
+
+        for (auto& f : fs::recursive_directory_iterator(extractDir, ec)) {
             if (!f.is_regular_file(ec)) continue;
             if (toUpper(f.path().filename().string()) == exeUp) {
-                // Mount the directory containing the exe as C:
                 mountDir = f.path().parent_path().string();
+                found = true;
                 break;
             }
         }
+
+        // DB exe not found on disk — scan for best scored candidate
+        if (!found) {
+            auto candidates = scanExtractedDir(extractDir, exeName);
+            if (!candidates.empty()) {
+                fs::path bestExe = extractDir / candidates[0].relPath;
+                exeName  = candidates[0].name;
+                mountDir = bestExe.parent_path().string();
+            }
+        }
     }
+
 
     std::string cycles  = result.cycles.empty() ? "max limit 80000" : result.cycles;
     int         memsize = result.memsize > 0 ? result.memsize : 16;
