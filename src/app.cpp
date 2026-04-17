@@ -170,6 +170,7 @@ bool App::init()
     m_ingestor.setConfsRoot(confsRoot);
     m_ingestor.setDosboxPath(dosbox);
     m_ingestor.setDatabase(&m_gameJson);
+    m_ingestor.setDos4gwPath(exeDir / "DOS4GW.EXE");
 
     // Open SQLite DB
     fs::path dbPath = dataDir / "autodos2.db";
