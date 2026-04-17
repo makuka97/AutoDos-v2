@@ -1,0 +1,24 @@
+{
+  "$schema": "https://raw.githubusercontent.com/microsoft/vcpkg-tool/main/docs/vcpkg.schema.json",
+  "name": "autodos2",
+  "version": "0.1.0",
+  "description": "Cross-platform DOS game frontend",
+  "dependencies": [
+    {
+      "name": "sdl2",
+      "features": ["default"]
+    },
+    "sdl2-image",
+    "sdl2-ttf",
+    {
+      "name": "imgui",
+      "features": [
+        "sdl2-binding",
+        "sdl2-renderer-binding"
+      ]
+    },
+    "nlohmann-json"
+  ],
+  "builtin-baseline": "2024-04-01",
+  "overrides": []
+}

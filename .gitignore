@@ -1,0 +1,28 @@
+# Build artifacts
+build/
+out/
+cmake-build-*/
+
+# vcpkg
+vcpkg_installed/
+vcpkg/
+
+# IDE
+.vscode/
+.idea/
+*.user
+*.suo
+*.sln
+*.vcxproj
+*.vcxproj.filters
+
+# macOS
+.DS_Store
+__MACOSX/
+
+# Windows
+Thumbs.db
+
+# Generated config (runtime, not committed)
+# app_config.json is the skeleton template — keep it tracked.
+autodos2.db

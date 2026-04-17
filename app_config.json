@@ -1,0 +1,28 @@
+{
+  "_comment": "AutoDOS2 configuration — auto-generated on first run. Edit with care.",
+  "version": 1,
+
+  "data_dir":    "",
+  "db_path":     "",
+  "dosbox_path": "",
+
+  "window": {
+    "width":  900,
+    "height": 700,
+    "fullscreen": false
+  },
+
+  "dosbox_defaults": {
+    "cycles":  "auto",
+    "memsize": 16,
+    "ems":     true,
+    "xms":     true
+  },
+
+  "ui": {
+    "theme": "autodos",
+    "grid_columns": 3,
+    "card_width":  180,
+    "card_height": 240
+  }
+}

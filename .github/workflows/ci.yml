@@ -1,0 +1,91 @@
+name: CI
+
+on:
+  push:
+    branches: [main, dev, "phase-*"]
+  pull_request:
+    branches: [main, dev]
+
+# Cancel in-progress runs for the same branch/PR
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        include:
+          - os: ubuntu-latest
+            triplet: x64-linux
+            extra_apt: libgl1-mesa-dev libgles2-mesa-dev libudev-dev libdbus-1-dev
+          - os: windows-latest
+            triplet: x64-windows
+          - os: macos-latest
+            triplet: x64-osx
+
+    steps:
+      # ── Checkout ─────────────────────────────────────────────────────────────
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # ── Linux system deps ─────────────────────────────────────────────────────
+      - name: Install system dependencies (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y ${{ matrix.extra_apt }}
+
+      # ── vcpkg bootstrap ───────────────────────────────────────────────────────
+      - name: Bootstrap vcpkg
+        uses: lukka/run-vcpkg@v11
+        with:
+          vcpkgGitCommitId: "2024.04.26"  # pin for reproducibility
+
+      # ── Cache vcpkg packages (keyed on manifest + triplet) ────────────────────
+      - name: Cache vcpkg installed packages
+        uses: actions/cache@v4
+        with:
+          path: ${{ github.workspace }}/vcpkg_installed
+          key: vcpkg-${{ matrix.triplet }}-${{ hashFiles('vcpkg.json') }}
+          restore-keys: |
+            vcpkg-${{ matrix.triplet }}-
+
+      # ── Configure ─────────────────────────────────────────────────────────────
+      - name: Configure CMake
+        run: |
+          cmake -B build \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_TOOLCHAIN_FILE="${{ env.VCPKG_ROOT }}/scripts/buildsystems/vcpkg.cmake" \
+            -DVCPKG_TARGET_TRIPLET=${{ matrix.triplet }}
+        shell: bash
+
+      # ── Build ─────────────────────────────────────────────────────────────────
+      - name: Build
+        run: cmake --build build --config Release --parallel
+
+      # ── Smoke test: binary exists and exits cleanly ───────────────────────────
+      # (Headless: set SDL_VIDEODRIVER=offscreen so it doesn't need a display)
+      - name: Smoke test — binary exists
+        run: |
+          if [ "${{ runner.os }}" = "Windows" ]; then
+            test -f build/bin/Release/AutoDOS2.exe
+          else
+            test -f build/bin/AutoDOS2
+          fi
+        shell: bash
+
+      # ── Upload artifact ───────────────────────────────────────────────────────
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: AutoDOS2-${{ matrix.os }}
+          path: |
+            build/bin/
+          retention-days: 7
