@@ -63,8 +63,14 @@ static bool isBlacklisted(const std::string& stem) {
 
 bool GameDatabase::load(const fs::path& jsonPath)
 {
-    std::ifstream f(jsonPath);
+    std::ifstream f(jsonPath, std::ios::binary);
     if (!f.is_open()) return false;
+
+    // Check file is not empty
+    f.seekg(0, std::ios::end);
+    auto sz = f.tellg();
+    f.seekg(0, std::ios::beg);
+    if (sz <= 0) return false;
 
     json root;
     try { f >> root; } catch (...) { return false; }
