@@ -132,10 +132,10 @@ bool App::init()
     m_covers.setRenderer(m_renderer);
 
     // ── Paths ─────────────────────────────────────────────────────────────────
-    fs::path dataDir   = getDataDir();          // %APPDATA%\AutoDOS2\autodos2\
-    fs::path exeDir    = getExeDir();           // next to AutoDOS2.exe
+    fs::path dataDir   = getDataDir();          // AppData/AutoDOS2/autodos2/
+    fs::path exeDir    = getExeDir();           // directory containing AutoDOS2.exe
     fs::path extractRoot = dataDir / "games";
-    fs::path confsRoot   = dataDir / "games";   // .conf lives beside game folder
+    fs::path confsRoot   = dataDir / "games";
     fs::path artRoot     = dataDir / "art";
     fs::path gamesJson   = dataDir / "games.json";
     fs::path sevenZip    = exeDir  / "7za.exe";
