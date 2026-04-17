@@ -68,6 +68,15 @@ private:
     // Cover art
     CoverCache m_covers;
 
+    // Paths needed at runtime
+    std::filesystem::path m_dosboxPath;
+    std::filesystem::path m_confsRoot;
+
+    // Launch state
+    enum class LaunchState { Idle, Running, Error };
+    LaunchState m_launchState = LaunchState::Idle;
+    std::string m_launchError;
+
     // Ingest worker
     IngestStatus  m_ingest;
     std::thread   m_ingestThread;
@@ -87,6 +96,8 @@ private:
     void renderGrid();
     void renderBottomBar(float winW);
     void renderIngestOverlay();
+    void launchGame(const GameRecord& rec);
+    void renderLaunchError();
     void applySearch();
     void refreshLibrary();
     void startIngest(const std::string& path);
