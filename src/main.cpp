@@ -1,17 +1,21 @@
 #include "app.h"
-#include "platform.h"
 
 #include <cstdio>
 #include <exception>
+#include <string>
 
-// ── Entry point ───────────────────────────────────────────────────────────────
-// On Windows we compile as a WIN32 (GUI) application so we need WinMain.
-// SDL2's SDL_main.h macro redirects WinMain → main on Windows when
-// SDL_MAIN_HANDLED is not defined. We let SDL handle it.
-
-#ifdef AUTODOS2_WINDOWS
-#  include <SDL.h>    // SDL_main.h is included transitively; SDL sets up WinMain
+#ifdef _WIN32
+#  include <windows.h>
 #endif
+
+static void fatalBox(const std::string& msg)
+{
+#ifdef _WIN32
+    MessageBoxA(nullptr, msg.c_str(), "AutoDOS2 — Fatal Error", MB_OK | MB_ICONERROR);
+#else
+    std::fprintf(stderr, "FATAL: %s\n", msg.c_str());
+#endif
+}
 
 int main(int /*argc*/, char* /*argv*/[])
 {
@@ -19,7 +23,7 @@ int main(int /*argc*/, char* /*argv*/[])
         AutoDOS2::App app;
 
         if (!app.init()) {
-            std::fprintf(stderr, "[AutoDOS2] Initialisation failed. Exiting.\n");
+            fatalBox("app.init() failed.\n\nCheck that SDL2.dll, games.json, and 7za.exe are next to AutoDOS2.exe.");
             return 1;
         }
 
@@ -27,11 +31,11 @@ int main(int /*argc*/, char* /*argv*/[])
         return 0;
     }
     catch (const std::exception& ex) {
-        std::fprintf(stderr, "[AutoDOS2] Fatal exception: %s\n", ex.what());
+        fatalBox(std::string("Unhandled exception:\n\n") + ex.what());
         return 1;
     }
     catch (...) {
-        std::fprintf(stderr, "[AutoDOS2] Unknown fatal exception.\n");
+        fatalBox("Unknown fatal exception. Check that all DLLs are present.");
         return 1;
     }
 }
