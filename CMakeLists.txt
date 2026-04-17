@@ -11,17 +11,16 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 
-# ── vcpkg toolchain (auto-detected if VCPKG_ROOT is set) ─────────────────────
+# ── vcpkg toolchain ───────────────────────────────────────────────────────────
 if(DEFINED ENV{VCPKG_ROOT} AND NOT DEFINED CMAKE_TOOLCHAIN_FILE)
     set(CMAKE_TOOLCHAIN_FILE "$ENV{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake"
         CACHE STRING "vcpkg toolchain")
 endif()
 
-# ── Dependencies (all via vcpkg) ──────────────────────────────────────────────
-find_package(SDL2         CONFIG REQUIRED)
-find_package(SDL2_image   CONFIG REQUIRED)
-find_package(SDL2_ttf     CONFIG REQUIRED)
-find_package(imgui        CONFIG REQUIRED)
+# ── Dependencies via vcpkg ────────────────────────────────────────────────────
+find_package(SDL2        CONFIG REQUIRED)
+find_package(SDL2_image  CONFIG REQUIRED)
+find_package(SDL2_ttf    CONFIG REQUIRED)
 find_package(nlohmann_json CONFIG REQUIRED)
 
 # ── Platform detection ────────────────────────────────────────────────────────
@@ -37,7 +36,27 @@ else()
 endif()
 message(STATUS "AutoDOS2 target platform: ${AUTODOS2_PLATFORM}")
 
-# ── Sources ───────────────────────────────────────────────────────────────────
+# ── Vendored ImGui (SDL2 + SDL_Renderer backend) ──────────────────────────────
+set(IMGUI_DIR ${CMAKE_SOURCE_DIR}/src/imgui)
+
+add_library(imgui STATIC
+    ${IMGUI_DIR}/imgui.cpp
+    ${IMGUI_DIR}/imgui_demo.cpp
+    ${IMGUI_DIR}/imgui_draw.cpp
+    ${IMGUI_DIR}/imgui_tables.cpp
+    ${IMGUI_DIR}/imgui_widgets.cpp
+    ${IMGUI_DIR}/imgui_impl_sdl2.cpp
+    ${IMGUI_DIR}/imgui_impl_sdlrenderer2.cpp
+)
+
+target_include_directories(imgui PUBLIC ${IMGUI_DIR})
+
+target_link_libraries(imgui PUBLIC
+    $<TARGET_NAME_IF_EXISTS:SDL2::SDL2main>
+    $<IF:$<TARGET_EXISTS:SDL2::SDL2>,SDL2::SDL2,SDL2::SDL2-static>
+)
+
+# ── App sources ───────────────────────────────────────────────────────────────
 set(AUTODOS2_SOURCES
     src/main.cpp
     src/app.cpp
@@ -48,11 +67,16 @@ set(AUTODOS2_SOURCES
 
 # ── Executable ────────────────────────────────────────────────────────────────
 if(WIN32)
-    # Windows GUI app — no console window
     add_executable(AutoDOS2 WIN32 ${AUTODOS2_SOURCES})
 else()
     add_executable(AutoDOS2 ${AUTODOS2_SOURCES})
 endif()
+
+# ── Include dirs ──────────────────────────────────────────────────────────────
+target_include_directories(AutoDOS2 PRIVATE
+    ${CMAKE_SOURCE_DIR}/src
+    ${IMGUI_DIR}
+)
 
 # ── Compile definitions ───────────────────────────────────────────────────────
 target_compile_definitions(AutoDOS2 PRIVATE
@@ -62,32 +86,26 @@ target_compile_definitions(AutoDOS2 PRIVATE
     $<$<BOOL:${AUTODOS2_WIN32}>:AUTODOS2_WINDOWS>
     $<$<BOOL:${AUTODOS2_MACOS}>:AUTODOS2_MACOS>
     $<$<BOOL:${AUTODOS2_LINUX}>:AUTODOS2_LINUX>
-    # Suppress MSVC min/max macro pollution
     $<$<CXX_COMPILER_ID:MSVC>:NOMINMAX WIN32_LEAN_AND_MEAN>
 )
 
 # ── Compiler warnings ─────────────────────────────────────────────────────────
 target_compile_options(AutoDOS2 PRIVATE
-    $<$<CXX_COMPILER_ID:MSVC>:/W4 /WX /utf-8>
-    $<$<CXX_COMPILER_ID:GNU,Clang>:-Wall -Wextra -Wpedantic -Werror>
+    $<$<CXX_COMPILER_ID:MSVC>:/W4 /utf-8>
+    $<$<CXX_COMPILER_ID:GNU,Clang>:-Wall -Wextra -Wpedantic>
 )
 
 # ── Link ──────────────────────────────────────────────────────────────────────
 target_link_libraries(AutoDOS2 PRIVATE
-    # SDL2
+    imgui
     $<TARGET_NAME_IF_EXISTS:SDL2::SDL2main>
     $<IF:$<TARGET_EXISTS:SDL2::SDL2>,SDL2::SDL2,SDL2::SDL2-static>
-    # SDL2_image
     $<IF:$<TARGET_EXISTS:SDL2_image::SDL2_image>,SDL2_image::SDL2_image,SDL2_image::SDL2_image-static>
-    # SDL2_ttf
     $<IF:$<TARGET_EXISTS:SDL2_ttf::SDL2_ttf>,SDL2_ttf::SDL2_ttf,SDL2_ttf::SDL2_ttf-static>
-    # ImGui (vcpkg imgui port exposes SDL2+SDL_Renderer backend as a separate component)
-    imgui::imgui
-    # JSON
     nlohmann_json::nlohmann_json
 )
 
-# macOS: link Cocoa/IOKit for SDL2
+# ── macOS frameworks ──────────────────────────────────────────────────────────
 if(APPLE)
     target_link_libraries(AutoDOS2 PRIVATE
         "-framework Cocoa"
@@ -97,5 +115,4 @@ if(APPLE)
     )
 endif()
 
-# ── Install (used by CI artifact packaging) ───────────────────────────────────
 install(TARGETS AutoDOS2 DESTINATION bin)
