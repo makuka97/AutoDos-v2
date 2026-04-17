@@ -3,6 +3,7 @@
 
 #include <SDL.h>
 #include <SDL_image.h>
+#include <SDL_syswm.h>
 
 #include <imgui.h>
 #include <imgui_impl_sdl2.h>
@@ -169,6 +170,8 @@ bool App::init()
     m_ingestor.setExtractRoot(extractRoot);
     m_ingestor.setConfsRoot(confsRoot);
     m_ingestor.setDosboxPath(dosbox);
+    m_dosboxPath = dosbox;
+    m_confsRoot  = confsRoot;
     m_ingestor.setDatabase(&m_gameJson);
     m_ingestor.setDos4gwPath(exeDir / "DOS4GW.EXE");
 
@@ -352,6 +355,9 @@ void App::renderImGui()
 
     // Ingest progress overlay
     if (m_ingest.busy || m_ingest.progress > 0) renderIngestOverlay();
+
+    // Launch error overlay
+    if (m_launchState == LaunchState::Error) renderLaunchError();
 }
 
 // ── Top bar ───────────────────────────────────────────────────────────────────
@@ -452,6 +458,10 @@ void App::renderGrid()
         ImGui::InvisibleButton("##card",{CARD_W,CARD_H});
         bool hov=ImGui::IsItemHovered();
         if (ImGui::IsItemClicked()) m_selected=sel?-1:g.id;
+        if (ImGui::IsItemClicked() && ImGui::IsMouseDoubleClicked(0) && !sel)
+            launchGame(g);
+        else if (ImGui::IsMouseDoubleClicked(0) && g.id==m_selected)
+            launchGame(g);
 
         ImU32 bg=sel?IM_COL32(32,58,42,255):hov?IM_COL32(28,38,38,255):IM_COL32(18,22,30,255);
         dl->AddRectFilled(pos,{pos.x+CARD_W,pos.y+CARD_H},bg,8.0f);
@@ -511,7 +521,9 @@ void App::renderBottomBar(float winW)
     ImGui::PushStyleColor(ImGuiCol_ButtonHovered, IM_COL32(50,110,70,255));
     ImGui::PushStyleColor(ImGuiCol_ButtonActive,  IM_COL32(80,200,120,255));
     if (!hasSel) ImGui::BeginDisabled();
-    if (ImGui::Button("  Launch  ")) { /* Phase 05 */ }
+    if (ImGui::Button("  Launch  ")) {
+        if (sel) launchGame(*sel);
+    }
     if (!hasSel) ImGui::EndDisabled();
     ImGui::PopStyleColor(3);
 
@@ -583,6 +595,110 @@ void App::renderIngestOverlay()
         ImGui::Spacing();
         ImGui::ProgressBar(pct/100.0f,{-1,0});
     }
+
+    ImGui::End();
+}
+
+
+// ── launchGame ────────────────────────────────────────────────────────────────
+
+void App::launchGame(const GameRecord& rec)
+{
+    if (m_dosboxPath.empty() || !std::filesystem::exists(m_dosboxPath)) {
+        m_launchState = LaunchState::Error;
+        m_launchError = "DOSBox not found at:
+" + m_dosboxPath.string() +
+                        "
+
+Place dosbox.exe inside the dosbox\ folder next to AutoDOS2.exe.";
+        return;
+    }
+
+    // Conf path: confsRoot/slug.conf
+    std::filesystem::path confPath = m_confsRoot / (rec.slug + ".conf");
+    if (!std::filesystem::exists(confPath)) {
+        m_launchState = LaunchState::Error;
+        m_launchError = "No .conf found for "" + rec.title + ""
+
+" +
+                        confPath.string() + "
+
+Try removing and re-adding the game.";
+        return;
+    }
+
+#ifdef _WIN32
+    std::string cmd = """ + m_dosboxPath.string() + "" -conf "" + confPath.string() + """;
+
+    STARTUPINFOA si        = { sizeof(si) };
+    PROCESS_INFORMATION pi = {};
+    si.dwFlags             = STARTF_USESHOWWINDOW;
+    si.wShowWindow         = SW_SHOWNORMAL;
+
+    if (!CreateProcessA(nullptr, const_cast<char*>(cmd.c_str()),
+                        nullptr, nullptr, FALSE, 0,
+                        nullptr, nullptr, &si, &pi)) {
+        m_launchState = LaunchState::Error;
+        m_launchError = "Failed to launch DOSBox.
+Command: " + cmd;
+        return;
+    }
+
+    m_launchState = LaunchState::Running;
+
+    // Wait for DOSBox in a detached thread, then return AutoDOS2 to front
+    HANDLE hProc = pi.hProcess;
+    SDL_SysWMinfo wmInfo = {};
+    SDL_VERSION(&wmInfo.version);
+    HWND hWnd = nullptr;
+    if (SDL_GetWindowWMInfo(m_window, &wmInfo))
+        hWnd = wmInfo.info.win.window;
+
+    // Record play in DB
+    m_db.recordPlay(rec.id);
+    refreshLibrary();
+
+    std::thread([this, hProc, hWnd]() {
+        WaitForSingleObject(hProc, INFINITE);
+        CloseHandle(hProc);
+        m_launchState = LaunchState::Idle;
+        // Bring AutoDOS2 back to front
+        if (hWnd) {
+            SetForegroundWindow(hWnd);
+            ShowWindow(hWnd, SW_RESTORE);
+        }
+    }).detach();
+
+    CloseHandle(pi.hThread);
+#else
+    (void)rec;
+    m_launchState = LaunchState::Error;
+    m_launchError = "Launch not yet implemented on this platform.";
+#endif
+}
+
+// ── renderLaunchError ─────────────────────────────────────────────────────────
+
+void App::renderLaunchError()
+{
+    const ImGuiIO& io = ImGui::GetIO();
+    ImGui::SetNextWindowPos({io.DisplaySize.x*0.5f, io.DisplaySize.y*0.5f},
+        ImGuiCond_Always, {0.5f,0.5f});
+    ImGui::SetNextWindowSize({400,160});
+    ImGui::SetNextWindowBgAlpha(0.95f);
+    ImGui::Begin("##launcherr", nullptr,
+        ImGuiWindowFlags_NoDecoration|ImGuiWindowFlags_NoMove|
+        ImGuiWindowFlags_NoSavedSettings);
+
+    ImGui::TextColored({1.0f,0.4f,0.4f,1.0f}, "Launch Error");
+    ImGui::Separator();
+    ImGui::Spacing();
+    ImGui::PushTextWrapPos(380);
+    ImGui::TextWrapped("%s", m_launchError.c_str());
+    ImGui::PopTextWrapPos();
+    ImGui::Spacing();
+    if (ImGui::Button("OK", {80,0}))
+        m_launchState = LaunchState::Idle;
 
     ImGui::End();
 }
