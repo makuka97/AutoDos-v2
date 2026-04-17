@@ -77,6 +77,7 @@ public:
     void setConfsRoot   (const std::filesystem::path& p) { m_confsRoot = p; }
     void setDosboxPath  (const std::filesystem::path& p) { m_dosboxPath = p; }
     void setDatabase    (const GameDatabase* db)         { m_db = db; }
+    void setDos4gwPath  (const std::filesystem::path& p) { m_dos4gwPath = p; }
 
     // Progress callback: called with 0..100 during extract
     using ProgressFn = std::function<void(int)>;
@@ -98,6 +99,7 @@ private:
     std::filesystem::path m_extractRoot;
     std::filesystem::path m_confsRoot;
     std::filesystem::path m_dosboxPath;
+    std::filesystem::path m_dos4gwPath;
     const GameDatabase*   m_db = nullptr;
 
     // Helpers
