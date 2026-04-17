@@ -68,12 +68,14 @@ if(WIN32)
     add_executable(AutoDOS2 WIN32
         src/main.cpp src/app.cpp src/app.h
         src/gamedb.cpp src/gamedb.h
+    src/ingest.cpp src/ingest.h
         src/platform.cpp src/platform.h
     )
 else()
     add_executable(AutoDOS2
         src/main.cpp src/app.cpp src/app.h
         src/gamedb.cpp src/gamedb.h
+    src/ingest.cpp src/ingest.h
         src/platform.cpp src/platform.h
     )
 endif()
@@ -90,6 +92,7 @@ target_link_libraries(AutoDOS2 PRIVATE
 add_executable(test_db
     src/test_db.cpp
     src/gamedb.cpp src/gamedb.h
+    src/ingest.cpp src/ingest.h
     src/platform.cpp src/platform.h
 )
 target_include_directories(test_db PRIVATE ${CMAKE_SOURCE_DIR}/src)
