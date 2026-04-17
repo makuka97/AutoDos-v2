@@ -1,4 +1,4 @@
-// ingest.cpp — Phase 04 ZIP ingest pipeline
+// ingest.cpp — Phase 04/05 ZIP ingest pipeline
 #include "ingest.h"
 
 #include <nlohmann/json.hpp>
@@ -7,6 +7,7 @@
 #include <cctype>
 #include <filesystem>
 #include <fstream>
+#include <functional>
 #include <sstream>
 #include <string>
 #include <vector>
@@ -34,14 +35,11 @@ std::string toLower(const std::string& s) {
     return r;
 }
 
-// Slugify: lowercase, strip everything that isn't a letter or digit.
-// "Duke Nukem 3D" -> "dukenukm3d"  (matches games.json keys exactly)
 std::string slugify(const std::string& s) {
     std::string r;
-    for (char c : s) {
+    for (char c : s)
         if (std::isalnum((unsigned char)c))
             r += std::tolower((unsigned char)c);
-    }
     return r;
 }
 
@@ -66,7 +64,6 @@ bool GameDatabase::load(const fs::path& jsonPath)
     std::ifstream f(jsonPath, std::ios::binary);
     if (!f.is_open()) return false;
 
-    // Check file is not empty
     f.seekg(0, std::ios::end);
     auto sz = f.tellg();
     f.seekg(0, std::ios::beg);
@@ -82,38 +79,48 @@ bool GameDatabase::load(const fs::path& jsonPath)
     m_exeToSlug.clear();
 
     for (auto it = games.begin(); it != games.end(); ++it) {
-        const std::string& slug = it.key();
-        const json& g = it.value();
+        try {
+            const std::string& slug = it.key();
+            const json& g = it.value();
+            if (!g.is_object()) continue;
 
-        GameEntry e;
-        e.slug        = slug;
-        e.title       = g.value("title",        "");
-        e.exe         = g.value("exe",           "");
-        e.workDir     = g.value("work_dir",      "");
-        // cycles can be string OR integer in games.json
-        if (g.contains("cycles")) {
-            const auto& cyc = g["cycles"];
-            if (cyc.is_string())       e.cycles = cyc.get<std::string>();
-            else if (cyc.is_number())  e.cycles = std::to_string(cyc.get<int>());
-            else                       e.cycles = "max limit 80000";
-        } else {
-            e.cycles = "max limit 80000";
-        }
-        e.memsize     = g.value("memsize",       16);
-        e.ems         = g.value("ems",           true);
-        e.xms         = g.value("xms",           true);
-        e.cdMount     = g.value("cd_mount",      false);
-        e.installFirst= g.value("install_first", false);
-        e.year        = g.value("year",          0);
+            GameEntry e;
+            e.slug = slug;
 
-        m_bySlug[slug] = e;
+            if (g.contains("title") && g["title"].is_string())
+                e.title = g["title"].get<std::string>();
+            if (g.contains("exe") && g["exe"].is_string())
+                e.exe = g["exe"].get<std::string>();
+            if (g.contains("work_dir") && g["work_dir"].is_string())
+                e.workDir = g["work_dir"].get<std::string>();
 
-        // Index by uppercase exe filename for fast lookup
-        if (!e.exe.empty()) {
-            std::string exeUp = toUpper(e.exe);
-            // Only store first match (some games share an exe name — rare)
-            m_exeToSlug.emplace(exeUp, slug);
-        }
+            if (g.contains("cycles")) {
+                const auto& cyc = g["cycles"];
+                if      (cyc.is_string()) e.cycles = cyc.get<std::string>();
+                else if (cyc.is_number()) e.cycles = std::to_string(cyc.get<int>());
+                else                      e.cycles = "max limit 80000";
+            } else {
+                e.cycles = "max limit 80000";
+            }
+
+            if (g.contains("memsize") && g["memsize"].is_number())
+                e.memsize = g["memsize"].get<int>();
+            if (g.contains("ems") && g["ems"].is_boolean())
+                e.ems = g["ems"].get<bool>();
+            if (g.contains("xms") && g["xms"].is_boolean())
+                e.xms = g["xms"].get<bool>();
+            if (g.contains("cd_mount") && g["cd_mount"].is_boolean())
+                e.cdMount = g["cd_mount"].get<bool>();
+            if (g.contains("install_first") && g["install_first"].is_boolean())
+                e.installFirst = g["install_first"].get<bool>();
+            if (g.contains("year") && g["year"].is_number())
+                e.year = g["year"].get<int>();
+
+            m_bySlug[slug] = e;
+            if (!e.exe.empty())
+                m_exeToSlug.emplace(toUpper(e.exe), slug);
+
+        } catch (...) {}
     }
 
     m_loaded = true;
@@ -139,7 +146,6 @@ std::string Ingestor::run7za(const std::string& args) const
 {
 #ifdef _WIN32
     if (m_7zaPath.empty()) return "";
-
     std::string cmd = "\"" + m_7zaPath.string() + "\" " + args;
 
     SECURITY_ATTRIBUTES sa = { sizeof(sa), nullptr, TRUE };
@@ -190,7 +196,6 @@ bool Ingestor::extract7za(const fs::path& archive, const fs::path& outDir) const
 }
 
 // ── scanExtractedDir ──────────────────────────────────────────────────────────
-// Walk the extracted folder and collect scored exe candidates.
 
 std::vector<Ingestor::ExeCandidate>
 Ingestor::scanExtractedDir(const fs::path& dir, const std::string& archiveStem) const
@@ -199,31 +204,21 @@ Ingestor::scanExtractedDir(const fs::path& dir, const std::string& archiveStem) 
     if (!fs::exists(dir)) return candidates;
 
     std::string stemLo = toLower(archiveStem);
+    std::error_code ec;
 
-    // Recursive walk
     std::function<void(const fs::path&, int)> walk = [&](const fs::path& d, int depth) {
-        std::error_code ec;
         for (auto& entry : fs::directory_iterator(d, ec)) {
-            if (entry.is_directory(ec)) {
-                walk(entry.path(), depth + 1);
-                continue;
-            }
+            if (entry.is_directory(ec)) { walk(entry.path(), depth + 1); continue; }
             if (!entry.is_regular_file(ec)) continue;
 
             std::string ext = toUpper(entry.path().extension().string());
-            if (ext.empty()) continue;
-            if (ext[0] == '.') ext = ext.substr(1);
+            if (!ext.empty() && ext[0] == '.') ext = ext.substr(1);
             if (ext != "EXE" && ext != "COM" && ext != "BAT") continue;
 
             std::string stem = toLower(entry.path().stem().string());
             if (isBlacklisted(stem)) continue;
 
-            // Score
-            float score = 0.0f;
-            if      (ext == "EXE") score = 1.0f;
-            else if (ext == "BAT") score = 0.7f;
-            else if (ext == "COM") score = 0.6f;
-
+            float score = (ext == "EXE") ? 1.0f : (ext == "BAT") ? 0.7f : 0.6f;
             score -= depth * 0.15f;
             if (score < 0.01f) score = 0.01f;
 
@@ -233,7 +228,6 @@ Ingestor::scanExtractedDir(const fs::path& dir, const std::string& archiveStem) 
                 stem == "run"  || stem == "main" || stem == "go")
                 score += 0.15f;
 
-            // Relative path from extractRoot/slug/
             fs::path rel = fs::relative(entry.path(), dir, ec);
             candidates.push_back({rel.string(), toUpper(entry.path().filename().string()), score});
         }
@@ -246,14 +240,12 @@ Ingestor::scanExtractedDir(const fs::path& dir, const std::string& archiveStem) 
 }
 
 // ── analyze ───────────────────────────────────────────────────────────────────
-// Fast path: list archive contents with 7za, find exe names, match to DB.
-// No extraction yet.
 
 AnalyzeResult Ingestor::analyze(const fs::path& archivePath) const
 {
     AnalyzeResult result;
 
-    // List archive contents
+    // List archive contents via 7za
     std::string listArgs = "l -slt \"" + archivePath.string() + "\"";
     std::string listing  = run7za(listArgs);
 
@@ -262,21 +254,19 @@ AnalyzeResult Ingestor::analyze(const fs::path& archivePath) const
         return result;
     }
 
-    // Parse 7za listing to get file names
+    // Parse file names from 7za listing
     std::vector<std::string> exeNames;
     std::istringstream ss(listing);
-    std::string line;
-    std::string currentPath;
-    bool        isDir = false;
+    std::string line, currentPath;
+    bool isDir = false;
 
     auto commit = [&]() {
         if (currentPath.empty() || isDir) return;
-        // Normalise separators
         std::replace(currentPath.begin(), currentPath.end(), '\\', '/');
         std::string fname = currentPath;
         size_t sl = fname.rfind('/');
         if (sl != std::string::npos) fname = fname.substr(sl + 1);
-        std::string ext = toUpper(fname.size() > 4 ? fname.substr(fname.size()-3) : "");
+        std::string ext = fname.size() > 4 ? toUpper(fname.substr(fname.size() - 3)) : "";
         if (ext == "EXE" || ext == "COM" || ext == "BAT")
             exeNames.push_back(toUpper(fname));
         currentPath.clear(); isDir = false;
@@ -289,11 +279,9 @@ AnalyzeResult Ingestor::analyze(const fs::path& archivePath) const
         if (eq == std::string::npos) continue;
         std::string key = line.substr(0, eq);
         std::string val = line.substr(eq + 3);
-        // trim
         while (!key.empty() && key.back() == ' ') key.pop_back();
         while (!val.empty() && val.back() == ' ') val.pop_back();
-
-        if (key == "Path")       { commit(); currentPath = val; }
+        if      (key == "Path")       { commit(); currentPath = val; }
         else if (key == "Attributes") isDir = val.find('D') != std::string::npos;
     }
     commit();
@@ -303,86 +291,65 @@ AnalyzeResult Ingestor::analyze(const fs::path& archivePath) const
         return result;
     }
 
-    // ── Match 1: exe filename against games.json ──────────────────────────────
+    // ── Match 1: exe filename → games.json ───────────────────────────────────
     if (m_db) {
         for (const auto& exeName : exeNames) {
-            std::string stemOnly = exeName;
-            // strip blacklisted
-            std::string stemLo = toLower(stemOnly.substr(0, stemOnly.rfind('.')));
+            std::string stemLo = toLower(exeName.substr(0, exeName.rfind('.')));
             if (isBlacklisted(stemLo)) continue;
 
             const GameEntry* entry = m_db->byExe(exeName);
             if (entry) {
-                result.success    = true;
-                result.slug       = entry->slug;
-                result.title      = entry->title;
-                result.exe        = entry->exe;
-                result.workDir    = entry->workDir;
-                result.cycles     = entry->cycles;
-                result.memsize    = entry->memsize;
-                result.ems        = entry->ems;
-                result.xms        = entry->xms;
-                result.cdMount    = entry->cdMount;
-                result.installFirst = entry->installFirst;
-                result.source     = "exe_match";
-                result.confidence = 1.0f;
-                result.gameType   = entry->cdMount ? "CD_BASED" : "SIMPLE";
+                result.success     = true;
+                result.slug        = entry->slug;
+                result.title       = entry->title;
+                result.exe         = entry->exe;
+                result.workDir     = entry->workDir;
+                result.cycles      = entry->cycles;
+                result.memsize     = entry->memsize;
+                result.ems         = entry->ems;
+                result.xms         = entry->xms;
+                result.cdMount     = entry->cdMount;
+                result.installFirst= entry->installFirst;
+                result.source      = "exe_match";
+                result.confidence  = 1.0f;
+                result.gameType    = entry->cdMount ? "CD_BASED" : "SIMPLE";
                 return result;
             }
         }
 
-        // ── Match 2: archive stem → slugify → JSON key (exact then prefix) ────
+        // ── Match 2: archive stem → slugify → JSON key ────────────────────────
         std::string archiveStem = archivePath.stem().string();
         std::string slug        = slugify(archiveStem);
         const GameEntry* entry  = m_db->bySlug(slug);
-
-        // Pass 2b: prefix match — "fatalracingdoswin" starts with "fatalracing"
-        if (!entry && slug.size() >= 5) {
-            size_t bestLen = 4;
-            const GameEntry* bestEntry = nullptr;
-            for (auto& [key, val] : m_db->allEntries()) {
-                if (slug.find(key) == 0 && key.size() > bestLen) {
-                    bestLen  = key.size();
-                    bestEntry = &val;
-                } else if (key.find(slug) == 0 && slug.size() > bestLen) {
-                    bestLen  = slug.size();
-                    bestEntry = &val;
-                }
-            }
-            entry = bestEntry;
-        }
-
         if (entry) {
-            result.success    = true;
-            result.slug       = entry->slug;
-            result.title      = entry->title;
-            result.exe        = entry->exe;
-            result.workDir    = entry->workDir;
-            result.cycles     = entry->cycles;
-            result.memsize    = entry->memsize;
-            result.ems        = entry->ems;
-            result.xms        = entry->xms;
-            result.cdMount    = entry->cdMount;
-            result.installFirst = entry->installFirst;
-            result.source     = "slug_match";
-            result.confidence = 0.9f;
-            result.gameType   = entry->cdMount ? "CD_BASED" : "SIMPLE";
+            result.success     = true;
+            result.slug        = entry->slug;
+            result.title       = entry->title;
+            result.exe         = entry->exe;
+            result.workDir     = entry->workDir;
+            result.cycles      = entry->cycles;
+            result.memsize     = entry->memsize;
+            result.ems         = entry->ems;
+            result.xms         = entry->xms;
+            result.cdMount     = entry->cdMount;
+            result.installFirst= entry->installFirst;
+            result.source      = "slug_match";
+            result.confidence  = 0.9f;
+            result.gameType    = entry->cdMount ? "CD_BASED" : "SIMPLE";
             return result;
         }
     }
 
-    // ── Match 3: best scored exe (unknown game) ───────────────────────────────
-    // Pick the highest-scoring non-blacklisted exe from the listing
-    std::vector<std::pair<float, std::string>> scored;
+    // ── Match 3: best scored exe ──────────────────────────────────────────────
     std::string archiveStem = archivePath.stem().string();
     std::string stemLo = toLower(archiveStem);
+    std::vector<std::pair<float, std::string>> scored;
 
     for (const auto& exeName : exeNames) {
         std::string s = toLower(exeName.substr(0, exeName.rfind('.')));
         if (isBlacklisted(s)) continue;
         float score = 1.0f;
-        if (s == stemLo || s.find(stemLo) == 0 || stemLo.find(s) == 0)
-            score += 0.3f;
+        if (s == stemLo || s.find(stemLo) == 0 || stemLo.find(s) == 0) score += 0.3f;
         scored.push_back({score, exeName});
     }
     std::sort(scored.begin(), scored.end(),
@@ -391,7 +358,7 @@ AnalyzeResult Ingestor::analyze(const fs::path& archivePath) const
     if (!scored.empty()) {
         result.success    = true;
         result.slug       = slugify(archiveStem);
-        result.title      = archiveStem; // user can rename later
+        result.title      = archiveStem;
         result.exe        = scored[0].second;
         result.cycles     = "max limit 80000";
         result.memsize    = 16;
@@ -417,11 +384,10 @@ bool Ingestor::writeDosboxConf(const fs::path& extractedDir,
 
     fs::path confPath = m_confsRoot / (result.slug + ".conf");
 
-    // If conf already exists, preserve it (only written once — v1 behaviour)
+    // Only write once — preserved across remove/re-add (v1 behaviour)
     if (fs::exists(confPath)) return true;
 
-    // Find the actual exe on disk — search recursively for the exe name
-    // This handles cases where work_dir doesn't match the actual extracted folder name
+    // Exe name only (strip any path prefix)
     std::string exeName = result.exe;
     {
         size_t sl = exeName.find_last_of("/\\");
@@ -429,15 +395,15 @@ bool Ingestor::writeDosboxConf(const fs::path& extractedDir,
     }
 
     // Walk extracted dir to find where the exe actually lives.
-    // If the DB exe name is not found on disk (version mismatch),
-    // fall back to the best scored exe found on disk.
+    // If the DB exe is not found on disk (version mismatch), fall back
+    // to the best scored exe found on disk.
     std::string mountDir = extractedDir.string();
     {
         std::error_code ec;
         std::string exeUp = toUpper(exeName);
         bool found = false;
 
-        for (auto& f : fs::recursive_directory_iterator(extractDir, ec)) {
+        for (auto& f : fs::recursive_directory_iterator(extractedDir, ec)) {
             if (!f.is_regular_file(ec)) continue;
             if (toUpper(f.path().filename().string()) == exeUp) {
                 mountDir = f.path().parent_path().string();
@@ -446,17 +412,16 @@ bool Ingestor::writeDosboxConf(const fs::path& extractedDir,
             }
         }
 
-        // DB exe not found on disk — scan for best scored candidate
+        // DB exe not found on disk — use best scored candidate instead
         if (!found) {
-            auto candidates = scanExtractedDir(extractDir, exeName);
+            auto candidates = scanExtractedDir(extractedDir, exeName);
             if (!candidates.empty()) {
-                fs::path bestExe = extractDir / candidates[0].relPath;
+                fs::path bestExe = extractedDir / candidates[0].relPath;
                 exeName  = candidates[0].name;
                 mountDir = bestExe.parent_path().string();
             }
         }
     }
-
 
     std::string cycles  = result.cycles.empty() ? "max limit 80000" : result.cycles;
     int         memsize = result.memsize > 0 ? result.memsize : 16;
@@ -466,15 +431,13 @@ bool Ingestor::writeDosboxConf(const fs::path& extractedDir,
     autoexec << "mount C \"" << mountDir << "\"\r\n";
 
     if (result.cdMount) {
-        // Look for ISO/CUE in extracted dir
-        std::string isoPath;
         std::error_code ec;
+        std::string isoPath;
         for (auto& f : fs::recursive_directory_iterator(extractedDir, ec)) {
             if (!f.is_regular_file(ec)) continue;
             std::string ext = toUpper(f.path().extension().string());
             if (ext == ".ISO" || ext == ".CUE" || ext == ".MDF") {
-                isoPath = f.path().string();
-                break;
+                isoPath = f.path().string(); break;
             }
         }
         if (!isoPath.empty())
@@ -486,16 +449,12 @@ bool Ingestor::writeDosboxConf(const fs::path& extractedDir,
     autoexec << "exit\r\n";
 
     std::ostringstream conf;
-    conf << "[sdl]\r\n"
-         << "fullscreen=true\r\nfullresolution=desktop\r\noutput=openglnb\r\n\r\n";
-    conf << "[dosbox]\r\n"
-         << "machine=svga_s3\r\nmemsize=" << memsize << "\r\n\r\n";
-    conf << "[cpu]\r\n"
-         << "core=dynamic\r\ncputype=pentium_slow\r\ncycles=" << cycles << "\r\n"
-         << "cycleup=500\r\ncycledown=20\r\n\r\n";
-    conf << "[dos]\r\n"
-         << "ems=" << (result.ems ? "true" : "false") << "\r\n"
-         << "xms=" << (result.xms ? "true" : "false") << "\r\n\r\n";
+    conf << "[sdl]\r\nfullscreen=true\r\nfullresolution=desktop\r\noutput=openglnb\r\n\r\n";
+    conf << "[dosbox]\r\nmachine=svga_s3\r\nmemsize=" << memsize << "\r\n\r\n";
+    conf << "[cpu]\r\ncore=dynamic\r\ncputype=pentium_slow\r\ncycles=" << cycles << "\r\n";
+    conf << "cycleup=500\r\ncycledown=20\r\n\r\n";
+    conf << "[dos]\r\nems=" << (result.ems ? "true" : "false") << "\r\n";
+    conf << "xms=" << (result.xms ? "true" : "false") << "\r\n\r\n";
     conf << "[mixer]\r\nrate=44100\r\nblocksize=1024\r\nprebuffer=20\r\n\r\n";
     conf << "[render]\r\nframeskip=0\r\naspect=true\r\n\r\n";
     conf << "[autoexec]\r\n" << autoexec.str() << "\r\n";
@@ -510,16 +469,13 @@ bool Ingestor::writeDosboxConf(const fs::path& extractedDir,
 
 AnalyzeResult Ingestor::ingest(const fs::path& archivePath, ProgressFn progress)
 {
-    // Step 1: analyze (fast — no extraction)
     AnalyzeResult result = analyze(archivePath);
     if (!result.success) return result;
 
     if (progress) progress(5);
 
-    // Step 2: extract
+    // Extract
     fs::path extractDir = m_extractRoot / result.slug;
-
-    // Skip extraction if already extracted (re-add scenario)
     if (!fs::exists(extractDir) || fs::is_empty(extractDir)) {
         if (!extract7za(archivePath, extractDir)) {
             result.success = false;
@@ -530,55 +486,38 @@ AnalyzeResult Ingestor::ingest(const fs::path& archivePath, ProgressFn progress)
 
     if (progress) progress(80);
 
-    // Step 2b: auto-copy DOS4GW.EXE — required by many 32-bit DOS games
-    // (Doom, Quake, Duke3D, etc.). Games that don't need it will ignore it.
+    // Auto-copy DOS4GW.EXE into every game folder
     if (!m_dos4gwPath.empty()) {
         std::error_code ec;
         fs::path dst = extractDir / "DOS4GW.EXE";
-        if (!fs::exists(dst))
-            fs::copy_file(m_dos4gwPath, dst, ec);
-    }
-
-    // Step 3: for scored/unknown matches, rescan extracted dir to confirm exe
-    if (result.source == "scored" || result.source == "unknown") {
-        auto candidates = scanExtractedDir(extractDir, archivePath.stem().string());
-        if (!candidates.empty()) {
-            result.exe = candidates[0].name;
-        }
+        if (!fs::exists(dst)) fs::copy_file(m_dos4gwPath, dst, ec);
     }
 
     if (progress) progress(90);
 
-    // Step 4: check for bundled DOSBox conf inside the extracted dir
-    // Some non-ExoDOS archives ship their own conf — use it directly
+    // Check for bundled DOSBox conf (non-ExoDOS archives)
     {
         std::error_code ec;
         fs::path bundledConf;
         for (auto& f : fs::recursive_directory_iterator(extractDir, ec)) {
             if (!f.is_regular_file(ec)) continue;
-            std::string fname = toLower(f.path().filename().string());
-            // Accept dosbox.conf or dosbox_single.conf but not ones inside a
-            // sub-folder called DOSBOX that is the bundled emulator itself
+            std::string fname      = toLower(f.path().filename().string());
             std::string parentName = toLower(f.path().parent_path().filename().string());
-            if ((fname == "dosbox.conf" || fname == "dosbox_single.conf") 
+            if ((fname == "dosbox.conf" || fname == "dosbox_single.conf")
                 && parentName != "dosbox") {
-                bundledConf = f.path();
-                break;
+                bundledConf = f.path(); break;
             }
         }
-
         fs::path ourConf = m_confsRoot / (result.slug + ".conf");
         if (!bundledConf.empty() && !fs::exists(ourConf)) {
-            // Copy bundled conf as our conf
             fs::copy_file(bundledConf, ourConf, ec);
         }
     }
 
-    // Step 5: write .conf if not already present (skipped if bundled or re-add)
+    // Write conf (skipped if already exists or bundled conf was copied)
     writeDosboxConf(extractDir, result);
 
     if (progress) progress(100);
-
     return result;
 }
 
