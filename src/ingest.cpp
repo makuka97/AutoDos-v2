@@ -403,18 +403,27 @@ bool Ingestor::writeDosboxConf(const fs::path& extractedDir,
     // If conf already exists, preserve it (only written once — v1 behaviour)
     if (fs::exists(confPath)) return true;
 
-    // Determine mount dir: if workDir specified, mount that subdir as C:
-    std::string mountDir = extractedDir.string();
-    if (!result.workDir.empty()) {
-        fs::path sub = extractedDir / result.workDir;
-        if (fs::exists(sub)) mountDir = sub.string();
-    }
-
-    // Exe name only (no path) — C: is already mounted at the right dir
+    // Find the actual exe on disk — search recursively for the exe name
+    // This handles cases where work_dir doesn't match the actual extracted folder name
     std::string exeName = result.exe;
     {
         size_t sl = exeName.find_last_of("/\\");
         if (sl != std::string::npos) exeName = exeName.substr(sl + 1);
+    }
+
+    // Walk extracted dir to find where the exe actually lives
+    std::string mountDir = extractedDir.string();
+    {
+        std::error_code ec;
+        std::string exeUp = toUpper(exeName);
+        for (auto& f : fs::recursive_directory_iterator(extractedDir, ec)) {
+            if (!f.is_regular_file(ec)) continue;
+            if (toUpper(f.path().filename().string()) == exeUp) {
+                // Mount the directory containing the exe as C:
+                mountDir = f.path().parent_path().string();
+                break;
+            }
+        }
     }
 
     std::string cycles  = result.cycles.empty() ? "max limit 80000" : result.cycles;
@@ -508,7 +517,32 @@ AnalyzeResult Ingestor::ingest(const fs::path& archivePath, ProgressFn progress)
 
     if (progress) progress(90);
 
-    // Step 4: write .conf (skipped if already exists)
+    // Step 4: check for bundled DOSBox conf inside the extracted dir
+    // Some non-ExoDOS archives ship their own conf — use it directly
+    {
+        std::error_code ec;
+        fs::path bundledConf;
+        for (auto& f : fs::recursive_directory_iterator(extractDir, ec)) {
+            if (!f.is_regular_file(ec)) continue;
+            std::string fname = toLower(f.path().filename().string());
+            // Accept dosbox.conf or dosbox_single.conf but not ones inside a
+            // sub-folder called DOSBOX that is the bundled emulator itself
+            std::string parentName = toLower(f.path().parent_path().filename().string());
+            if ((fname == "dosbox.conf" || fname == "dosbox_single.conf") 
+                && parentName != "dosbox") {
+                bundledConf = f.path();
+                break;
+            }
+        }
+
+        fs::path ourConf = m_confsRoot / (result.slug + ".conf");
+        if (!bundledConf.empty() && !fs::exists(ourConf)) {
+            // Copy bundled conf as our conf
+            fs::copy_file(bundledConf, ourConf, ec);
+        }
+    }
+
+    // Step 5: write .conf if not already present (skipped if bundled or re-add)
     writeDosboxConf(extractDir, result);
 
     if (progress) progress(100);
