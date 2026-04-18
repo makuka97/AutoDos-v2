@@ -5,6 +5,9 @@
 #include <SDL.h>
 #include <SDL_image.h>
 #include <SDL_syswm.h>
+#ifdef _WIN32
+#  include <shellapi.h>
+#endif
 
 #include <imgui.h>
 #include <imgui_impl_sdl2.h>
@@ -821,7 +824,15 @@ void App::renderSettingsPanel()
     ImGui::SetNextItemWidth(-1);
     ImGui::InputText("##sgdb", sgdbBuf, sizeof(sgdbBuf),
         ImGuiInputTextFlags_Password);
-    ImGui::TextDisabled("Get a free key at steamgriddb.com/profile/preferences");
+    ImGui::TextDisabled("Get a free key at steamgriddb.com");
+    ImGui::SameLine();
+    if (ImGui::SmallButton("Open in browser")) {
+#ifdef _WIN32
+        ShellExecuteA(nullptr, "open",
+            "https://www.steamgriddb.com/profile/preferences",
+            nullptr, nullptr, SW_SHOWNORMAL);
+#endif
+    }
 
     ImGui::Spacing();
     ImGui::TextColored(ACCENT,"Info");
