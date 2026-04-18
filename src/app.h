@@ -2,6 +2,7 @@
 
 #include "gamedb.h"
 #include "ingest.h"
+#include "settings.h"
 
 #include <SDL.h>
 #include <atomic>
@@ -82,9 +83,13 @@ private:
     std::thread   m_ingestThread;
 
     // UI state
-    bool m_running        = false;
-    bool m_showDemoWindow = false;
-    char m_searchBuf[256] = {};
+    bool m_running          = false;
+    bool m_showDemoWindow   = false;
+    bool m_showSettings     = false;
+    bool m_showAbout        = false;
+    char m_searchBuf[256]   = {};
+    AppSettings m_settings;
+    std::filesystem::path m_configPath;
 
     // Internals
     void processEvents();
@@ -98,6 +103,8 @@ private:
     void renderIngestOverlay();
     void launchGame(const GameRecord& rec);
     void renderLaunchError();
+    void renderSettingsPanel();
+    void renderAboutPanel();
     void applySearch();
     void refreshLibrary();
     void startIngest(const std::string& path);
