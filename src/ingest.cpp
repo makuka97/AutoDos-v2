@@ -50,7 +50,7 @@ static bool isBlacklisted(const std::string& stem) {
         "directx","dxsetup","vcredist","dotnet",
         "dos4gw","cwsdpmi","himemx","emm386",
         "fixsave","fix","convert","copy","move",
-        "dosbox","dosbox_staging","scummvm","boxer"
+        "dosbox","dosbox_staging","dosbox-x","dosboxx","scummvm","boxer"
     };
     std::string lo = toLower(stem);
     for (auto& b : BL) if (lo == b) return true;
@@ -208,7 +208,14 @@ Ingestor::scanExtractedDir(const fs::path& dir, const std::string& archiveStem) 
 
     std::function<void(const fs::path&, int)> walk = [&](const fs::path& d, int depth) {
         for (auto& entry : fs::directory_iterator(d, ec)) {
-            if (entry.is_directory(ec)) { walk(entry.path(), depth + 1); continue; }
+            if (entry.is_directory(ec)) {
+                // Skip DOSBOX and DOSBOX-X bundled emulator folders
+                std::string dirName = toLower(entry.path().filename().string());
+                if (dirName == "dosbox" || dirName == "dosbox-x" || dirName == "dosbx")
+                    continue;
+                walk(entry.path(), depth + 1);
+                continue;
+            }
             if (!entry.is_regular_file(ec)) continue;
 
             std::string ext = toUpper(entry.path().extension().string());
@@ -321,6 +328,21 @@ AnalyzeResult Ingestor::analyze(const fs::path& archivePath) const
         std::string archiveStem = archivePath.stem().string();
         std::string slug        = slugify(archiveStem);
         const GameEntry* entry  = m_db->bySlug(slug);
+
+        // Try stripping trailing year (4 digits) from slug if no match
+        if (!entry && slug.size() > 4) {
+            std::string noYear = slug;
+            // Strip trailing 4-digit year
+            bool hasYear = true;
+            for (int i = 0; i < 4; i++)
+                if (!std::isdigit((unsigned char)noYear[noYear.size()-1-i]))
+                    { hasYear = false; break; }
+            if (hasYear) {
+                noYear = noYear.substr(0, noYear.size() - 4);
+                entry = m_db->bySlug(noYear);
+                if (entry) slug = noYear;
+            }
+        }
         if (entry) {
             result.success     = true;
             result.slug        = entry->slug;
@@ -392,18 +414,27 @@ bool Ingestor::writeDosboxConf(const fs::path& extractedDir,
         if (sl != std::string::npos) exeName = exeName.substr(sl + 1);
     }
 
-    // ── Find all ISO/CUE/MDF/BIN images in extracted dir ─────────────────────
+    // ── Find all ISO/CUE/MDF images in extracted dir ─────────────────────────
+    // Skip bundled emulator subfolders (dosbox, dosbox-x) and pre-mounted
+    // C: drive subfolders (DOSBox-X style zips with a C\ subfolder)
     std::vector<std::string> isoFiles;
     {
         std::error_code ec;
         for (auto& f : fs::recursive_directory_iterator(extractedDir, ec)) {
             if (!f.is_regular_file(ec)) continue;
+            // Skip files inside bundled emulator folders
+            std::string pathStr = toLower(f.path().string());
+            bool skip = false;
+            for (auto& seg : f.path()) {
+                std::string s = toLower(seg.string());
+                if (s == "dosbox" || s == "dosbox-x" || s == "dosboxx")
+                    { skip = true; break; }
+            }
+            if (skip) continue;
             std::string ext = toUpper(f.path().extension().string());
-            // BIN only if paired with a CUE (avoid raw data files)
             if (ext == ".ISO" || ext == ".CUE" || ext == ".MDF")
                 isoFiles.push_back(f.path().string());
         }
-        // Sort so Disc1 < Disc2 < Disc3 etc.
         std::sort(isoFiles.begin(), isoFiles.end());
     }
 
