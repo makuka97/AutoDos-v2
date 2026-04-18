@@ -50,7 +50,7 @@ static bool isBlacklisted(const std::string& stem) {
         "directx","dxsetup","vcredist","dotnet",
         "dos4gw","cwsdpmi","himemx","emm386",
         "fixsave","fix","convert","copy","move",
-        "dosbox","dosbox_staging","dosbox-x","dosboxx","scummvm","boxer"
+        "dosbox","dosbox_staging","dosbox-x","dosboxx","scummvm","boxer","loadpats","intro","movie"
     };
     std::string lo = toLower(stem);
     for (auto& b : BL) if (lo == b) return true;
@@ -455,7 +455,7 @@ bool Ingestor::writeDosboxConf(const fs::path& extractedDir,
         }
 
         if (!found) {
-            auto candidates = scanExtractedDir(extractedDir, exeName);
+            auto candidates = scanExtractedDir(extractedDir, result.slug);
             if (!candidates.empty()) {
                 fs::path bestExe = extractedDir / candidates[0].relPath;
                 exeName  = candidates[0].name;
