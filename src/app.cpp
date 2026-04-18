@@ -818,6 +818,7 @@ void App::renderSettingsPanel()
 
     ImGui::Spacing(); ImGui::Spacing();
     ImGui::Spacing(); ImGui::Spacing();
+    ImGui::Spacing(); ImGui::Spacing();
     if (ImGui::Button("Save",{100,0})) {
         m_settings.dosboxPath    = dosboxBuf;
         m_settings.defaultCycles = cyclesBuf;
@@ -830,21 +831,18 @@ void App::renderSettingsPanel()
     }
     ImGui::SameLine();
     if (ImGui::Button("Cancel",{100,0})) {
-        m_showSettings=false; dosboxBuf[0]='\0'; cyclesBuf[0]='\0'; sgdbBuf[0]='\0';
+        m_showSettings=false;
+        dosboxBuf[0]='\0'; cyclesBuf[0]='\0'; sgdbBuf[0]='\0';
     }
     ImGui::SameLine();
     if (ImGui::Button("About",{80,0})) {
         m_showSettings=false; m_showAbout=true;
-    if (ImGui::Button("Cancel",{100,0})) {
-        m_showSettings=false; dosboxBuf[0]='\0'; cyclesBuf[0]='\0';
-    }
-    ImGui::SameLine();
-    if (ImGui::Button("About",{80,0})) {
-        m_showSettings=false; m_showAbout=true;
-        dosboxBuf[0]='\0'; cyclesBuf[0]='\0';
+        dosboxBuf[0]='\0'; cyclesBuf[0]='\0'; sgdbBuf[0]='\0';
     }
 
     ImGui::End();
+}
+
 }
 
 // ── About panel ───────────────────────────────────────────────────────────────
