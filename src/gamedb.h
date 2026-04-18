@@ -5,8 +5,9 @@
 #include <string>
 #include <vector>
 
-// Forward-declare sqlite3 so we don't pull in sqlite3.h everywhere
+// Forward-declare sqlite3 types OUTSIDE any namespace
 struct sqlite3;
+struct sqlite3_stmt;
 
 namespace AutoDOS2 {
 
