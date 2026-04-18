@@ -63,6 +63,9 @@ public:
     // Look up by exe filename (e.g. "DUKE3D.EXE") — case-insensitive
     const GameEntry* byExe(const std::string& exeName) const;
 
+    // Access all entries for fuzzy matching
+    const std::unordered_map<std::string, GameEntry>& allEntries() const { return m_bySlug; }
+
 private:
     bool m_loaded = false;
     std::unordered_map<std::string, GameEntry>  m_bySlug;
@@ -78,6 +81,9 @@ public:
     void setDosboxPath  (const std::filesystem::path& p) { m_dosboxPath = p; }
     void setDatabase    (const GameDatabase* db)         { m_db = db; }
     void setDos4gwPath  (const std::filesystem::path& p) { m_dos4gwPath = p; }
+
+    // Ingest a pre-extracted folder (for CD/ISO games user already unzipped)
+    AnalyzeResult ingestFolder(const std::filesystem::path& folderPath);
 
     // Progress callback: called with 0..100 during extract
     using ProgressFn = std::function<void(int)>;
