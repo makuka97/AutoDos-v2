@@ -18,6 +18,7 @@
 #include <cstdio>
 #include <cstring>
 #include <filesystem>
+#include <fstream>
 #include <string>
 
 #ifndef AUTODOS2_VERSION_MAJOR
