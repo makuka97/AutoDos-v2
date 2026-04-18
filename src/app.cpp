@@ -804,4 +804,94 @@ void App::renderSettingsPanel()
     ImGui::Separator(); ImGui::Spacing();
 
     static char sgdbBuf[128] = {};
-    if (sgdbBuf[0]=='
+    if (sgdbBuf[0]=='\0') strncpy(sgdbBuf, m_settings.sgdbApiKey.c_str(), 127);
+    ImGui::Text("SteamGridDB API key:");
+    ImGui::SetNextItemWidth(-1);
+    ImGui::InputText("##sgdb", sgdbBuf, sizeof(sgdbBuf),
+        ImGuiInputTextFlags_Password);
+    ImGui::TextDisabled("Get a free key at steamgriddb.com/profile/preferences");
+
+    ImGui::Spacing();
+    ImGui::TextColored(ACCENT,"Info");
+    ImGui::Separator(); ImGui::Spacing();
+    ImGui::TextDisabled("Data: %s",m_settings.dataDir.c_str());
+
+    ImGui::Spacing(); ImGui::Spacing();
+    ImGui::Spacing(); ImGui::Spacing();
+    if (ImGui::Button("Save",{100,0})) {
+        m_settings.dosboxPath    = dosboxBuf;
+        m_settings.defaultCycles = cyclesBuf;
+        m_settings.sgdbApiKey    = sgdbBuf;
+        m_settings.save(m_configPath);
+        m_dosboxPath = m_settings.dosboxPath;
+        m_artFetcher.setApiKey(m_settings.sgdbApiKey);
+        m_showSettings = false;
+        dosboxBuf[0]='\0'; cyclesBuf[0]='\0'; sgdbBuf[0]='\0';
+    }
+    ImGui::SameLine();
+    if (ImGui::Button("Cancel",{100,0})) {
+        m_showSettings=false; dosboxBuf[0]='\0'; cyclesBuf[0]='\0'; sgdbBuf[0]='\0';
+    }
+    ImGui::SameLine();
+    if (ImGui::Button("About",{80,0})) {
+        m_showSettings=false; m_showAbout=true;
+    if (ImGui::Button("Cancel",{100,0})) {
+        m_showSettings=false; dosboxBuf[0]='\0'; cyclesBuf[0]='\0';
+    }
+    ImGui::SameLine();
+    if (ImGui::Button("About",{80,0})) {
+        m_showSettings=false; m_showAbout=true;
+        dosboxBuf[0]='\0'; cyclesBuf[0]='\0';
+    }
+
+    ImGui::End();
+}
+
+// ── About panel ───────────────────────────────────────────────────────────────
+
+void App::renderAboutPanel()
+{
+    const ImGuiIO& io = ImGui::GetIO();
+    ImGui::SetNextWindowPos({io.DisplaySize.x*0.5f,io.DisplaySize.y*0.5f},
+        ImGuiCond_Always,{0.5f,0.5f});
+    ImGui::SetNextWindowSize({380,230});
+    ImGui::Begin("About AutoDOS2",&m_showAbout,
+        ImGuiWindowFlags_NoResize|ImGuiWindowFlags_NoCollapse);
+
+    ImGui::TextColored(ACCENT,"AutoDOS2");
+    ImGui::SameLine();
+    ImGui::TextDisabled("v%d.%d.%d",
+        AUTODOS2_VERSION_MAJOR,AUTODOS2_VERSION_MINOR,AUTODOS2_VERSION_PATCH);
+    ImGui::Spacing();
+    ImGui::TextWrapped("Cross-platform DOS game frontend.");
+    ImGui::Spacing(); ImGui::Separator(); ImGui::Spacing();
+    ImGui::TextDisabled("Powered by:");
+    ImGui::BulletText("DOSBox Staging");
+    ImGui::BulletText("eXoDOS database (%d entries)", m_gameJson.count());
+    ImGui::BulletText("SDL2 + Dear ImGui");
+    ImGui::BulletText("SQLite + nlohmann/json");
+    ImGui::Spacing(); ImGui::Separator(); ImGui::Spacing();
+    if (ImGui::Button("Close",{100,0})) m_showAbout=false;
+    ImGui::End();
+}
+
+// ── Cleanup ───────────────────────────────────────────────────────────────────
+
+void App::cleanup()
+{
+    if (m_ingestThread.joinable()) m_ingestThread.join();
+    m_covers.clear();
+    m_db.close();
+    if (m_renderer) {
+        ImGui_ImplSDLRenderer2_Shutdown();
+        ImGui_ImplSDL2_Shutdown();
+        ImGui::DestroyContext();
+        SDL_DestroyRenderer(m_renderer);
+        m_renderer=nullptr;
+    }
+    if (m_window) { SDL_DestroyWindow(m_window); m_window=nullptr; }
+    IMG_Quit();
+    SDL_Quit();
+}
+
+} // namespace AutoDOS2
