@@ -843,8 +843,6 @@ void App::renderSettingsPanel()
     ImGui::End();
 }
 
-}
-
 // ── About panel ───────────────────────────────────────────────────────────────
 
 void App::renderAboutPanel()
