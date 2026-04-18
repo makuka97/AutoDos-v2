@@ -806,13 +806,14 @@ void App::renderSettingsPanel()
         dosboxBuf[0]='\0'; cyclesBuf[0]='\0';
     }
     ImGui::SameLine();
+    ImGui::SameLine();
     if (ImGui::Button("Cancel",{100,0})) {
-        m_showSettings=false; dosboxBuf[0]='        m_showSettings=false; dosboxBuf[0]='\0'; cyclesBuf[0]='\0';'; cyclesBuf[0]='        m_showSettings=false; dosboxBuf[0]='\0'; cyclesBuf[0]='\0';';
+        m_showSettings=false; dosboxBuf[0]='\0'; cyclesBuf[0]='\0';
     }
     ImGui::SameLine();
     if (ImGui::Button("About",{80,0})) {
         m_showSettings=false; m_showAbout=true;
-        dosboxBuf[0]='        m_showSettings=false; dosboxBuf[0]='\0'; cyclesBuf[0]='\0';'; cyclesBuf[0]='        m_showSettings=false; dosboxBuf[0]='\0'; cyclesBuf[0]='\0';';
+        dosboxBuf[0]='\0'; cyclesBuf[0]='\0';
     }
 
     ImGui::End();
