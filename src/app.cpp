@@ -94,7 +94,18 @@ SDL_Texture* CoverCache::makePlaceholder()
 SDL_Texture* CoverCache::get(const std::string& path)
 {
     auto it = m_cache.find(path);
-    if (it != m_cache.end()) return it->second;
+    if (it != m_cache.end()) {
+        // If we cached the placeholder but the file now exists, reload it
+        if (it->second == m_placeholder && !path.empty()) {
+            SDL_Surface* s = IMG_Load(path.c_str());
+            if (s) {
+                SDL_Texture* t = SDL_CreateTextureFromSurface(m_renderer, s);
+                SDL_FreeSurface(s);
+                if (t) { it->second = t; return t; }
+            }
+        }
+        return it->second;
+    }
     SDL_Texture* t = nullptr;
     if (!path.empty()) {
         SDL_Surface* s = IMG_Load(path.c_str());
@@ -258,7 +269,8 @@ void App::startIngest(const std::string& path)
             if (!m_db.getBySlug(res.slug).has_value())
                 m_db.insert(rec);
 
-            // Fetch cover art in background
+            // Fetch cover art (runs on ingest thread, file lands in art/)
+            // CoverCache will auto-reload on next render when file exists
             if (m_artFetcher.hasApiKey()) {
                 fs::path artPath = getDataDir() / "art" / (res.slug + ".jpg");
                 m_artFetcher.fetch(res.title, artPath);
