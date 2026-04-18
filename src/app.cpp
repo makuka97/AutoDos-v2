@@ -358,6 +358,9 @@ void App::renderImGui()
 
     // Launch error overlay
     if (m_launchState == LaunchState::Error) renderLaunchError();
+
+    // Save state hint banner
+    if (m_launchBannerTimer > 0.0f) renderSaveHintBanner();
 }
 
 // ── Top bar ───────────────────────────────────────────────────────────────────
@@ -416,6 +419,15 @@ void App::renderSidebar()
         ImGui::TextDisabled("Played: %d times",sel->play_count);
         if (!sel->last_played.empty())
             ImGui::TextDisabled("Last: %.10s",sel->last_played.c_str());
+        ImGui::Spacing();
+        if (m_db.hasSave(sel->id))
+            ImGui::TextColored({0.314f,0.784f,0.471f,1.0f}, "Save state: YES");
+        else
+            ImGui::TextDisabled("Save state: none");
+        ImGui::Spacing();
+        ImGui::TextDisabled("In-game:");
+        ImGui::TextDisabled("Ctrl+F5 = Save");
+        ImGui::TextDisabled("Ctrl+F9 = Load");
         ImGui::PopTextWrapPos();
     } else {
         ImGui::SetCursorPos({10,16});
@@ -635,6 +647,8 @@ void App::launchGame(const GameRecord& rec)
     }
 
     m_launchState = LaunchState::Running;
+    m_launchBannerTimer = 4.0f;  // show hint for 4 seconds
+    m_launchingGameId   = rec.id;
 
     // Record play
     m_db.recordPlay(rec.id);
@@ -690,6 +704,43 @@ void App::renderLaunchError()
         m_launchState = LaunchState::Idle;
 
     ImGui::End();
+}
+
+// ── renderSaveHintBanner ─────────────────────────────────────────────────────
+
+void App::renderSaveHintBanner()
+{
+    const ImGuiIO& io = ImGui::GetIO();
+
+    // Fade out over last second
+    float alpha = std::min(m_launchBannerTimer, 1.0f);
+
+    ImGui::SetNextWindowPos({io.DisplaySize.x * 0.5f, io.DisplaySize.y - 70.0f},
+        ImGuiCond_Always, {0.5f, 0.5f});
+    ImGui::SetNextWindowSize({340, 44});
+    ImGui::SetNextWindowBgAlpha(0.82f * alpha);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 22.0f);
+    ImGui::Begin("##savehint", nullptr,
+        ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove |
+        ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoNav |
+        ImGuiWindowFlags_NoInputs);
+
+    ImGui::SetCursorPosY(12);
+    ImGui::SetCursorPosX(20);
+    ImGui::TextColored({0.314f, 0.784f, 0.471f, alpha},
+        "Ctrl+F5");
+    ImGui::SameLine();
+    ImGui::TextColored({0.863f, 0.863f, 0.863f, alpha},
+        "Save state");
+    ImGui::SameLine(0, 20);
+    ImGui::TextColored({0.314f, 0.784f, 0.471f, alpha},
+        "Ctrl+F9");
+    ImGui::SameLine();
+    ImGui::TextColored({0.863f, 0.863f, 0.863f, alpha},
+        "Load state");
+
+    ImGui::End();
+    ImGui::PopStyleVar();
 }
 
 // ── Cleanup ───────────────────────────────────────────────────────────────────
