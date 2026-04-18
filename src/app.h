@@ -110,6 +110,7 @@ private:
     void applySearch();
     void refreshLibrary();
     void startIngest(const std::string& path);
+    void startIngestFolder(const std::string& folderPath);
     void cleanup();
 };
 
