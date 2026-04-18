@@ -77,10 +77,6 @@ private:
     LaunchState m_launchState = LaunchState::Idle;
     std::string m_launchError;
 
-    // Save state hint banner
-    float       m_launchBannerTimer = 0.0f;  // counts down from 4s after launch
-    int         m_launchingGameId   = -1;     // game currently running
-
     // Ingest worker
     IngestStatus  m_ingest;
     std::thread   m_ingestThread;
@@ -102,7 +98,6 @@ private:
     void renderIngestOverlay();
     void launchGame(const GameRecord& rec);
     void renderLaunchError();
-    void renderSaveHintBanner();
     void applySearch();
     void refreshLibrary();
     void startIngest(const std::string& path);
