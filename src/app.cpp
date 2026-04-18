@@ -412,11 +412,6 @@ void App::renderSidebar()
         ImGui::TextDisabled("Played: %d times", sel->play_count);
         if (!sel->last_played.empty())
             ImGui::TextDisabled("Last: %.10s", sel->last_played.c_str());
-        ImGui::Spacing();
-        if (m_db.hasSave(sel->id))
-            ImGui::TextColored({0.314f,0.784f,0.471f,1.0f}, "Save state: YES");
-        else
-            ImGui::TextDisabled("Save state: none");
         ImGui::PopTextWrapPos();
 
         // Hotkey reference
@@ -431,8 +426,6 @@ void App::renderSidebar()
             ImGui::SameLine(90);
             ImGui::TextDisabled("%s", desc);
         };
-        hk("Ctrl+F5",  "Save state");
-        hk("Ctrl+F6",  "Load state");
         hk("Alt+Enter","Fullscreen");
         hk("Ctrl+F10", "Mouse lock");
         hk("Ctrl+F11", "Speed down");
