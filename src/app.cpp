@@ -185,6 +185,9 @@ bool App::init()
     m_ingestor.setDatabase(&m_gameJson);
     m_ingestor.setDos4gwPath(exeDir / "DOS4GW.EXE");
 
+    // Configure art fetcher
+    m_artFetcher.setApiKey(m_settings.sgdbApiKey);
+
     // Use settings dosbox path if configured
     m_dosboxPath = m_settings.dosboxPath.empty() ? dosbox : fs::path(m_settings.dosboxPath);
     m_confsRoot  = confsRoot;
@@ -254,6 +257,12 @@ void App::startIngest(const std::string& path)
             rec.cover_path = (getDataDir() / "art" / (res.slug + ".jpg")).string();
             if (!m_db.getBySlug(res.slug).has_value())
                 m_db.insert(rec);
+
+            // Fetch cover art in background
+            if (m_artFetcher.hasApiKey()) {
+                fs::path artPath = getDataDir() / "art" / (res.slug + ".jpg");
+                m_artFetcher.fetch(res.title, artPath);
+            }
         } else {
             std::lock_guard<std::mutex> lk(m_ingest.mtx);
             m_ingest.lastError = res.error;
@@ -760,7 +769,7 @@ void App::renderSettingsPanel()
     const ImGuiIO& io = ImGui::GetIO();
     ImGui::SetNextWindowPos({io.DisplaySize.x*0.5f,io.DisplaySize.y*0.5f},
         ImGuiCond_Always,{0.5f,0.5f});
-    ImGui::SetNextWindowSize({520,300});
+    ImGui::SetNextWindowSize({520,380});
     ImGui::Begin("Settings",&m_showSettings,
         ImGuiWindowFlags_NoResize|ImGuiWindowFlags_NoCollapse);
 
@@ -791,78 +800,8 @@ void App::renderSettingsPanel()
 
 
     ImGui::Spacing();
-    ImGui::TextColored(ACCENT,"Info");
+    ImGui::TextColored(ACCENT,"Cover Art");
     ImGui::Separator(); ImGui::Spacing();
-    ImGui::TextDisabled("Data: %s",m_settings.dataDir.c_str());
 
-    ImGui::Spacing(); ImGui::Spacing();
-    if (ImGui::Button("Save",{100,0})) {
-        m_settings.dosboxPath    = dosboxBuf;
-        m_settings.defaultCycles = cyclesBuf;
-        m_settings.save(m_configPath);
-        m_dosboxPath = m_settings.dosboxPath;
-        m_showSettings = false;
-        dosboxBuf[0]='\0'; cyclesBuf[0]='\0';
-    }
-    ImGui::SameLine();
-    ImGui::SameLine();
-    if (ImGui::Button("Cancel",{100,0})) {
-        m_showSettings=false; dosboxBuf[0]='\0'; cyclesBuf[0]='\0';
-    }
-    ImGui::SameLine();
-    if (ImGui::Button("About",{80,0})) {
-        m_showSettings=false; m_showAbout=true;
-        dosboxBuf[0]='\0'; cyclesBuf[0]='\0';
-    }
-
-    ImGui::End();
-}
-
-// ── About panel ───────────────────────────────────────────────────────────────
-
-void App::renderAboutPanel()
-{
-    const ImGuiIO& io = ImGui::GetIO();
-    ImGui::SetNextWindowPos({io.DisplaySize.x*0.5f,io.DisplaySize.y*0.5f},
-        ImGuiCond_Always,{0.5f,0.5f});
-    ImGui::SetNextWindowSize({380,230});
-    ImGui::Begin("About AutoDOS2",&m_showAbout,
-        ImGuiWindowFlags_NoResize|ImGuiWindowFlags_NoCollapse);
-
-    ImGui::TextColored(ACCENT,"AutoDOS2");
-    ImGui::SameLine();
-    ImGui::TextDisabled("v%d.%d.%d",
-        AUTODOS2_VERSION_MAJOR,AUTODOS2_VERSION_MINOR,AUTODOS2_VERSION_PATCH);
-    ImGui::Spacing();
-    ImGui::TextWrapped("Cross-platform DOS game frontend.");
-    ImGui::Spacing(); ImGui::Separator(); ImGui::Spacing();
-    ImGui::TextDisabled("Powered by:");
-    ImGui::BulletText("DOSBox Staging");
-    ImGui::BulletText("eXoDOS database (%d entries)", m_gameJson.count());
-    ImGui::BulletText("SDL2 + Dear ImGui");
-    ImGui::BulletText("SQLite + nlohmann/json");
-    ImGui::Spacing(); ImGui::Separator(); ImGui::Spacing();
-    if (ImGui::Button("Close",{100,0})) m_showAbout=false;
-    ImGui::End();
-}
-
-// ── Cleanup ───────────────────────────────────────────────────────────────────
-
-void App::cleanup()
-{
-    if (m_ingestThread.joinable()) m_ingestThread.join();
-    m_covers.clear();
-    m_db.close();
-    if (m_renderer) {
-        ImGui_ImplSDLRenderer2_Shutdown();
-        ImGui_ImplSDL2_Shutdown();
-        ImGui::DestroyContext();
-        SDL_DestroyRenderer(m_renderer);
-        m_renderer=nullptr;
-    }
-    if (m_window) { SDL_DestroyWindow(m_window); m_window=nullptr; }
-    IMG_Quit();
-    SDL_Quit();
-}
-
-} // namespace AutoDOS2
+    static char sgdbBuf[128] = {};
+    if (sgdbBuf[0]=='
