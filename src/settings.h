@@ -14,6 +14,7 @@ struct AppSettings {
     std::string defaultCycles = "max limit 80000";
     int         defaultMemsize = 16;
     bool        fullscreen     = true;
+    std::string sgdbApiKey;
 
     // UI
     int  gridColumns = 0;  // 0 = auto
