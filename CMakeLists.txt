@@ -69,6 +69,7 @@ if(WIN32)
         src/main.cpp src/app.cpp src/app.h
         src/gamedb.cpp src/gamedb.h
     src/ingest.cpp src/ingest.h
+    src/settings.cpp src/settings.h
         src/platform.cpp src/platform.h
     )
 else()
@@ -76,6 +77,7 @@ else()
         src/main.cpp src/app.cpp src/app.h
         src/gamedb.cpp src/gamedb.h
     src/ingest.cpp src/ingest.h
+    src/settings.cpp src/settings.h
         src/platform.cpp src/platform.h
     )
 endif()
@@ -93,6 +95,7 @@ add_executable(test_db
     src/test_db.cpp
     src/gamedb.cpp src/gamedb.h
     src/ingest.cpp src/ingest.h
+    src/settings.cpp src/settings.h
     src/platform.cpp src/platform.h
 )
 target_include_directories(test_db PRIVATE ${CMAKE_SOURCE_DIR}/src)
