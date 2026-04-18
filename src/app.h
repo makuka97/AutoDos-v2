@@ -3,6 +3,7 @@
 #include "gamedb.h"
 #include "ingest.h"
 #include "settings.h"
+#include "artfetcher.h"
 
 #include <SDL.h>
 #include <atomic>
@@ -89,6 +90,7 @@ private:
     bool m_showAbout        = false;
     char m_searchBuf[256]   = {};
     AppSettings m_settings;
+    ArtFetcher  m_artFetcher;
     std::filesystem::path m_configPath;
 
     // Internals
