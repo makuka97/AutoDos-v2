@@ -69,3 +69,24 @@ std::filesystem::path openFileDialog(const std::string& filter_desc,
 }
 
 } // namespace AutoDOS2
+
+std::filesystem::path AutoDOS2::openFolderDialog()
+{
+#ifdef _WIN32
+    BROWSEINFOA bi = {};
+    char buf[MAX_PATH] = {};
+    bi.lpszTitle  = "Select game folder";
+    bi.ulFlags    = BIF_RETURNONLYFSDIRS | BIF_NEWDIALOGSTYLE;
+    bi.pszDisplayName = buf;
+
+    LPITEMIDLIST pidl = SHBrowseForFolderA(&bi);
+    if (!pidl) return {};
+
+    char path[MAX_PATH] = {};
+    SHGetPathFromIDListA(pidl, path);
+    CoTaskMemFree(pidl);
+    return std::filesystem::path(path);
+#else
+    return {};
+#endif
+}
