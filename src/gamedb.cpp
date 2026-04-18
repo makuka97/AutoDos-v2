@@ -70,6 +70,16 @@ bool GameDB::createSchema()
         CREATE INDEX IF NOT EXISTS idx_games_slug  ON games(slug);
         CREATE INDEX IF NOT EXISTS idx_games_title ON games(title COLLATE NOCASE);
     )";
+
+    const char* saves_sql = R"(
+        CREATE TABLE IF NOT EXISTS saves (
+            id         INTEGER PRIMARY KEY AUTOINCREMENT,
+            game_id    INTEGER NOT NULL REFERENCES games(id) ON DELETE CASCADE,
+            saved_at   TEXT    NOT NULL DEFAULT (datetime('now'))
+        );
+        CREATE INDEX IF NOT EXISTS idx_saves_game ON saves(game_id);
+    )";
+    execSQL(saves_sql);
     return execSQL(sql);
 }
 
@@ -268,3 +278,28 @@ int GameDB::count()
 }
 
 } // namespace AutoDOS2
+
+// ── Save state tracking ───────────────────────────────────────────────────────
+
+bool GameDB::recordSave(int gameId)
+{
+    const char* sql = "INSERT INTO saves (game_id) VALUES (?);";
+    sqlite3_stmt* stmt = nullptr;
+    if (sqlite3_prepare_v2(m_db, sql, -1, &stmt, nullptr) != SQLITE_OK) return false;
+    sqlite3_bind_int(stmt, 1, gameId);
+    bool ok = (sqlite3_step(stmt) == SQLITE_DONE);
+    sqlite3_finalize(stmt);
+    return ok;
+}
+
+bool GameDB::hasSave(int gameId)
+{
+    const char* sql = "SELECT COUNT(*) FROM saves WHERE game_id = ?;";
+    sqlite3_stmt* stmt = nullptr;
+    if (sqlite3_prepare_v2(m_db, sql, -1, &stmt, nullptr) != SQLITE_OK) return false;
+    sqlite3_bind_int(stmt, 1, gameId);
+    int n = 0;
+    if (sqlite3_step(stmt) == SQLITE_ROW) n = sqlite3_column_int(stmt, 0);
+    sqlite3_finalize(stmt);
+    return n > 0;
+}
