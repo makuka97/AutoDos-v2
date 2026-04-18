@@ -383,20 +383,31 @@ bool Ingestor::writeDosboxConf(const fs::path& extractedDir,
     fs::create_directories(m_confsRoot);
 
     fs::path confPath = m_confsRoot / (result.slug + ".conf");
-
-    // Only write once — preserved across remove/re-add (v1 behaviour)
     if (fs::exists(confPath)) return true;
 
-    // Exe name only (strip any path prefix)
+    // Exe name only (strip path prefix)
     std::string exeName = result.exe;
     {
         size_t sl = exeName.find_last_of("/\\");
         if (sl != std::string::npos) exeName = exeName.substr(sl + 1);
     }
 
-    // Walk extracted dir to find where the exe actually lives.
-    // If the DB exe is not found on disk (version mismatch), fall back
-    // to the best scored exe found on disk.
+    // ── Find all ISO/CUE/MDF/BIN images in extracted dir ─────────────────────
+    std::vector<std::string> isoFiles;
+    {
+        std::error_code ec;
+        for (auto& f : fs::recursive_directory_iterator(extractedDir, ec)) {
+            if (!f.is_regular_file(ec)) continue;
+            std::string ext = toUpper(f.path().extension().string());
+            // BIN only if paired with a CUE (avoid raw data files)
+            if (ext == ".ISO" || ext == ".CUE" || ext == ".MDF")
+                isoFiles.push_back(f.path().string());
+        }
+        // Sort so Disc1 < Disc2 < Disc3 etc.
+        std::sort(isoFiles.begin(), isoFiles.end());
+    }
+
+    // ── Find exe location on disk ─────────────────────────────────────────────
     std::string mountDir = extractedDir.string();
     {
         std::error_code ec;
@@ -412,7 +423,6 @@ bool Ingestor::writeDosboxConf(const fs::path& extractedDir,
             }
         }
 
-        // DB exe not found on disk — use best scored candidate instead
         if (!found) {
             auto candidates = scanExtractedDir(extractedDir, exeName);
             if (!candidates.empty()) {
@@ -428,24 +438,40 @@ bool Ingestor::writeDosboxConf(const fs::path& extractedDir,
 
     std::ostringstream autoexec;
     autoexec << "@echo off\r\n";
-    autoexec << "mount C \"" << mountDir << "\"\r\n";
 
-    if (result.cdMount) {
-        std::error_code ec;
-        std::string isoPath;
-        for (auto& f : fs::recursive_directory_iterator(extractedDir, ec)) {
-            if (!f.is_regular_file(ec)) continue;
-            std::string ext = toUpper(f.path().extension().string());
-            if (ext == ".ISO" || ext == ".CUE" || ext == ".MDF") {
-                isoPath = f.path().string(); break;
-            }
+    if (result.cdMount && !isoFiles.empty()) {
+        // ── CD-based game ─────────────────────────────────────────────────────
+        // Mount C: as a writable drive for saves, D: as the CD
+        autoexec << "mount C \"" << mountDir << "\"\r\n";
+
+        if (isoFiles.size() == 1) {
+            // Single disc
+            autoexec << "imgmount D \"" << isoFiles[0] << "\" -t iso\r\n";
+            autoexec << "C:\r\n";
+            autoexec << exeName << "\r\n";
+        } else {
+            // Multi-disc — mount all ISOs as a swappable disc set
+            // DOSBox Staging supports multiple images on one imgmount line
+            autoexec << "imgmount D";
+            for (auto& iso : isoFiles)
+                autoexec << " \"" << iso << "\"";
+            autoexec << " -t iso\r\n";
+            autoexec << "C:\r\n";
+            autoexec << exeName << "\r\n";
         }
-        if (!isoPath.empty())
-            autoexec << "imgmount D \"" << isoPath << "\" -t iso\r\n";
+    } else if (result.cdMount && isoFiles.empty()) {
+        // cd_mount=true but no ISO found — game exe is on the C: drive,
+        // CD is just for music/video. Mount C: normally.
+        autoexec << "mount C \"" << mountDir << "\"\r\n";
+        autoexec << "C:\r\n";
+        autoexec << exeName << "\r\n";
+    } else {
+        // Standard non-CD game
+        autoexec << "mount C \"" << mountDir << "\"\r\n";
+        autoexec << "C:\r\n";
+        autoexec << exeName << "\r\n";
     }
 
-    autoexec << "C:\r\n";
-    autoexec << exeName << "\r\n";
     autoexec << "exit\r\n";
 
     std::ostringstream conf;
@@ -464,7 +490,6 @@ bool Ingestor::writeDosboxConf(const fs::path& extractedDir,
     out << conf.str();
     return true;
 }
-
 // ── ingest — full pipeline ────────────────────────────────────────────────────
 
 AnalyzeResult Ingestor::ingest(const fs::path& archivePath, ProgressFn progress)
@@ -495,26 +520,9 @@ AnalyzeResult Ingestor::ingest(const fs::path& archivePath, ProgressFn progress)
 
     if (progress) progress(90);
 
-    // Check for bundled DOSBox conf (non-ExoDOS archives)
-    {
-        std::error_code ec;
-        fs::path bundledConf;
-        for (auto& f : fs::recursive_directory_iterator(extractDir, ec)) {
-            if (!f.is_regular_file(ec)) continue;
-            std::string fname      = toLower(f.path().filename().string());
-            std::string parentName = toLower(f.path().parent_path().filename().string());
-            if ((fname == "dosbox.conf" || fname == "dosbox_single.conf")
-                && parentName != "dosbox") {
-                bundledConf = f.path(); break;
-            }
-        }
-        fs::path ourConf = m_confsRoot / (result.slug + ".conf");
-        if (!bundledConf.empty() && !fs::exists(ourConf)) {
-            fs::copy_file(bundledConf, ourConf, ec);
-        }
-    }
-
-    // Write conf (skipped if already exists or bundled conf was copied)
+    // Always generate our own DOSBox Staging conf.
+    // Bundled confs from zips are ignored — they target DOSBox-X or old
+    // DOSBox SVN and use relative paths that break outside their original tree.
     writeDosboxConf(extractDir, result);
 
     if (progress) progress(100);
