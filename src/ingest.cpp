@@ -1,991 +1,724 @@
-#include "app.h"
-#include "platform.h"
-#include "settings.h"
+// ingest.cpp — Phase 04/05 ZIP ingest pipeline
+#include "ingest.h"
 
-#include <SDL.h>
-#include <SDL_image.h>
-#include <SDL_syswm.h>
-#ifdef _WIN32
-#  include <shellapi.h>
-#endif
-
-#include <imgui.h>
-#include <imgui_impl_sdl2.h>
-#include <imgui_impl_sdlrenderer2.h>
+#include <nlohmann/json.hpp>
 
 #include <algorithm>
 #include <cctype>
-#include <cstdio>
-#include <cstring>
 #include <filesystem>
 #include <fstream>
+#include <functional>
+#include <sstream>
 #include <string>
+#include <vector>
 
-#ifndef AUTODOS2_VERSION_MAJOR
-#  define AUTODOS2_VERSION_MAJOR 0
-#  define AUTODOS2_VERSION_MINOR 9
-#  define AUTODOS2_VERSION_PATCH 0
+#ifdef _WIN32
+#  include <windows.h>
 #endif
 
+using json = nlohmann::json;
 namespace fs = std::filesystem;
 
 namespace AutoDOS2 {
 
-static constexpr ImVec4 ACCENT      = {0.314f, 0.784f, 0.471f, 1.0f};
-static constexpr ImU32  ACCENT32    = IM_COL32(80, 200, 120, 255);
-static constexpr ImU32  ACCENT32DIM = IM_COL32(60, 140, 90, 160);
+// ── String helpers ────────────────────────────────────────────────────────────
 
-static void applyAutoDOSTheme()
-{
-    ImGuiStyle& s = ImGui::GetStyle();
-    s.WindowRounding     = 0.0f;
-    s.ChildRounding      = 8.0f;
-    s.FrameRounding      = 6.0f;
-    s.ScrollbarRounding  = 4.0f;
-    s.GrabRounding       = 4.0f;
-    s.PopupRounding      = 8.0f;
-    s.FramePadding       = {10, 6};
-    s.ItemSpacing        = {8, 6};
-    s.ScrollbarSize      = 14.0f;
-    s.WindowBorderSize   = 0.0f;
-    s.ChildBorderSize    = 0.0f;
-
-    ImVec4* c = s.Colors;
-    c[ImGuiCol_WindowBg]             = {0.086f, 0.086f, 0.110f, 1.00f};
-    c[ImGuiCol_ChildBg]              = {0.100f, 0.100f, 0.129f, 1.00f};
-    c[ImGuiCol_PopupBg]              = {0.110f, 0.110f, 0.141f, 0.97f};
-    c[ImGuiCol_Border]               = {0.180f, 0.180f, 0.220f, 1.00f};
-    c[ImGuiCol_FrameBg]              = {0.130f, 0.130f, 0.165f, 1.00f};
-    c[ImGuiCol_FrameBgHovered]       = {0.157f, 0.220f, 0.180f, 1.00f};
-    c[ImGuiCol_FrameBgActive]        = {0.196f, 0.282f, 0.220f, 1.00f};
-    c[ImGuiCol_TitleBg]              = {0.060f, 0.060f, 0.080f, 1.00f};
-    c[ImGuiCol_TitleBgActive]        = {0.060f, 0.060f, 0.080f, 1.00f};
-    c[ImGuiCol_ScrollbarBg]          = {0.060f, 0.060f, 0.080f, 1.00f};
-    c[ImGuiCol_ScrollbarGrab]        = {0.200f, 0.200f, 0.260f, 1.00f};
-    c[ImGuiCol_ScrollbarGrabHovered] = {0.314f, 0.784f, 0.471f, 0.5f};
-    c[ImGuiCol_CheckMark]            = ACCENT;
-    c[ImGuiCol_Button]               = {0.125f, 0.204f, 0.157f, 1.00f};
-    c[ImGuiCol_ButtonHovered]        = {0.200f, 0.322f, 0.247f, 1.00f};
-    c[ImGuiCol_ButtonActive]         = ACCENT;
-    c[ImGuiCol_Header]               = {0.125f, 0.204f, 0.157f, 0.6f};
-    c[ImGuiCol_HeaderHovered]        = {0.200f, 0.322f, 0.247f, 1.00f};
-    c[ImGuiCol_HeaderActive]         = ACCENT;
-    c[ImGuiCol_Text]                 = {0.880f, 0.880f, 0.880f, 1.00f};
-    c[ImGuiCol_TextDisabled]         = {0.420f, 0.420f, 0.460f, 1.00f};
-    c[ImGuiCol_Separator]            = {0.180f, 0.180f, 0.220f, 1.00f};
-    c[ImGuiCol_Tab]                  = {0.100f, 0.100f, 0.129f, 1.00f};
-    c[ImGuiCol_TabHovered]           = {0.200f, 0.322f, 0.247f, 1.00f};
-    c[ImGuiCol_TabActive]            = {0.125f, 0.204f, 0.157f, 1.00f};
+std::string toUpper(const std::string& s) {
+    std::string r = s;
+    std::transform(r.begin(), r.end(), r.begin(), ::toupper);
+    return r;
 }
 
-// ── CoverCache ────────────────────────────────────────────────────────────────
-
-CoverCache::~CoverCache() { clear(); }
-
-SDL_Texture* CoverCache::makePlaceholder()
-{
-    constexpr int W = 180, H = 200;
-    SDL_Surface* s = SDL_CreateRGBSurfaceWithFormat(0,W,H,32,SDL_PIXELFORMAT_RGBA32);
-    if (!s) return nullptr;
-    SDL_FillRect(s, nullptr, SDL_MapRGB(s->format, 26, 28, 36));
-    SDL_Rect r = {W/4, H/4, W/2, H/2};
-    SDL_FillRect(s, &r, SDL_MapRGB(s->format, 34, 38, 52));
-    SDL_Texture* t = SDL_CreateTextureFromSurface(m_renderer, s);
-    SDL_FreeSurface(s);
-    return t;
+std::string toLower(const std::string& s) {
+    std::string r = s;
+    std::transform(r.begin(), r.end(), r.begin(), ::tolower);
+    return r;
 }
 
-SDL_Texture* CoverCache::get(const std::string& path)
+std::string slugify(const std::string& s) {
+    std::string r;
+    for (char c : s)
+        if (std::isalnum((unsigned char)c))
+            r += std::tolower((unsigned char)c);
+    return r;
+}
+
+static bool isBlacklisted(const std::string& stem) {
+    static const std::vector<std::string> BL = {
+        "setup","install","uninst","uninstall","patch","update",
+        "config","cfg","register","readme","read","help",
+        "directx","dxsetup","vcredist","dotnet",
+        "dos4gw","cwsdpmi","himemx","emm386",
+        "fixsave","fix","convert","copy","move",
+        "dosbox","dosbox_staging","dosbox-x","dosboxx","scummvm","boxer","loadpats","intro","movie"
+    };
+    std::string lo = toLower(stem);
+    for (auto& b : BL) if (lo == b) return true;
+    return false;
+}
+
+// ── GameDatabase ──────────────────────────────────────────────────────────────
+
+bool GameDatabase::load(const fs::path& jsonPath)
 {
-    auto it = m_cache.find(path);
-    if (it != m_cache.end()) {
-        // If we cached the placeholder but the file now exists, reload it
-        if (it->second == m_placeholder && !path.empty()) {
-            SDL_Surface* s = IMG_Load(path.c_str());
-            if (s) {
-                SDL_Texture* t = SDL_CreateTextureFromSurface(m_renderer, s);
-                SDL_FreeSurface(s);
-                if (t) { it->second = t; return t; }
+    std::ifstream f(jsonPath, std::ios::binary);
+    if (!f.is_open()) return false;
+
+    f.seekg(0, std::ios::end);
+    auto sz = f.tellg();
+    f.seekg(0, std::ios::beg);
+    if (sz <= 0) return false;
+
+    json root;
+    try { f >> root; } catch (...) { return false; }
+
+    auto& games = root["games"];
+    if (!games.is_object()) return false;
+
+    m_bySlug.clear();
+    m_exeToSlug.clear();
+
+    for (auto it = games.begin(); it != games.end(); ++it) {
+        try {
+            const std::string& slug = it.key();
+            const json& g = it.value();
+            if (!g.is_object()) continue;
+
+            GameEntry e;
+            e.slug = slug;
+
+            if (g.contains("title") && g["title"].is_string())
+                e.title = g["title"].get<std::string>();
+            if (g.contains("exe") && g["exe"].is_string())
+                e.exe = g["exe"].get<std::string>();
+            if (g.contains("work_dir") && g["work_dir"].is_string())
+                e.workDir = g["work_dir"].get<std::string>();
+
+            if (g.contains("cycles")) {
+                const auto& cyc = g["cycles"];
+                if      (cyc.is_string()) e.cycles = cyc.get<std::string>();
+                else if (cyc.is_number()) e.cycles = std::to_string(cyc.get<int>());
+                else                      e.cycles = "max limit 80000";
+            } else {
+                e.cycles = "max limit 80000";
             }
-        }
-        return it->second;
+
+            if (g.contains("memsize") && g["memsize"].is_number())
+                e.memsize = g["memsize"].get<int>();
+            if (g.contains("ems") && g["ems"].is_boolean())
+                e.ems = g["ems"].get<bool>();
+            if (g.contains("xms") && g["xms"].is_boolean())
+                e.xms = g["xms"].get<bool>();
+            if (g.contains("cd_mount") && g["cd_mount"].is_boolean())
+                e.cdMount = g["cd_mount"].get<bool>();
+            if (g.contains("install_first") && g["install_first"].is_boolean())
+                e.installFirst = g["install_first"].get<bool>();
+            if (g.contains("year") && g["year"].is_number())
+                e.year = g["year"].get<int>();
+
+            m_bySlug[slug] = e;
+            if (!e.exe.empty())
+                m_exeToSlug.emplace(toUpper(e.exe), slug);
+
+        } catch (...) {}
     }
-    SDL_Texture* t = nullptr;
-    if (!path.empty()) {
-        SDL_Surface* s = IMG_Load(path.c_str());
-        if (s) { t = SDL_CreateTextureFromSurface(m_renderer,s); SDL_FreeSurface(s); }
-    }
-    if (!t) { if (!m_placeholder) m_placeholder = makePlaceholder(); t = m_placeholder; }
-    m_cache[path] = t;
-    return t;
-}
 
-void CoverCache::clear()
-{
-    for (auto& [k,v] : m_cache) if (v && v!=m_placeholder) SDL_DestroyTexture(v);
-    m_cache.clear();
-    if (m_placeholder) { SDL_DestroyTexture(m_placeholder); m_placeholder=nullptr; }
-}
-
-// ── App ───────────────────────────────────────────────────────────────────────
-
-App::App()  = default;
-App::~App() { cleanup(); }
-
-bool App::init()
-{
-    if (SDL_Init(SDL_INIT_VIDEO|SDL_INIT_TIMER|SDL_INIT_GAMECONTROLLER)!=0) return false;
-    IMG_Init(IMG_INIT_PNG|IMG_INIT_JPG);
-    SDL_SetHint(SDL_HINT_VIDEO_HIGHDPI_DISABLED,"0");
-    SDL_SetHint(SDL_HINT_RENDER_VSYNC,"1");
-
-    m_window = SDL_CreateWindow("AutoDOS2",
-        SDL_WINDOWPOS_CENTERED,SDL_WINDOWPOS_CENTERED,WINDOW_W,WINDOW_H,
-        SDL_WINDOW_SHOWN|SDL_WINDOW_RESIZABLE|SDL_WINDOW_ALLOW_HIGHDPI);
-    if (!m_window) return false;
-
-    m_renderer = SDL_CreateRenderer(m_window,-1,
-        SDL_RENDERER_ACCELERATED|SDL_RENDERER_PRESENTVSYNC);
-    if (!m_renderer)
-        m_renderer = SDL_CreateRenderer(m_window,-1,SDL_RENDERER_SOFTWARE);
-    if (!m_renderer) return false;
-
-    IMGUI_CHECKVERSION();
-    ImGui::CreateContext();
-    ImGuiIO& io2 = ImGui::GetIO();
-    io2.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
-    io2.IniFilename  = nullptr;
-
-    // Load default font at larger size for readability
-    ImFontConfig fontCfg;
-    fontCfg.SizePixels    = 15.0f;
-    fontCfg.OversampleH   = 2;
-    fontCfg.OversampleV   = 2;
-    fontCfg.PixelSnapH    = true;
-    io2.Fonts->AddFontDefault(&fontCfg);
-    io2.Fonts->Build();
-
-    applyAutoDOSTheme();
-    ImGui_ImplSDL2_InitForSDLRenderer(m_window, m_renderer);
-    ImGui_ImplSDLRenderer2_Init(m_renderer);
-
-    m_covers.setRenderer(m_renderer);
-
-    fs::path dataDir   = getDataDir();
-    fs::path exeDir    = getExeDir();
-    fs::path extractRoot = dataDir / "games";
-    fs::path confsRoot   = dataDir / "games";
-    fs::path artRoot     = dataDir / "art";
-    fs::path sevenZip    = exeDir  / "7za.exe";
-    fs::path dosbox      = exeDir  / "dosbox" / "dosbox.exe";
-
-    fs::create_directories(extractRoot);
-    fs::create_directories(artRoot);
-
-    // Load settings
-    m_configPath = exeDir / "app_config.json";
-    m_settings.load(m_configPath);
-    m_settings.applyDefaults(exeDir, dataDir);
-
-    // Load games.json
-    fs::path jsonSrc = exeDir / "games.json";
-    if (!fs::exists(jsonSrc)) jsonSrc = dataDir / "games.json";
-    if (m_gameJson.load(jsonSrc))
-        std::fprintf(stdout,"[AutoDOS2] Loaded %d games\n", m_gameJson.count());
-
-    m_ingestor.setSevenZipPath(sevenZip);
-    m_ingestor.setExtractRoot(extractRoot);
-    m_ingestor.setConfsRoot(confsRoot);
-    m_ingestor.setDosboxPath(dosbox);
-    m_ingestor.setDatabase(&m_gameJson);
-    m_ingestor.setDos4gwPath(exeDir / "DOS4GW.EXE");
-
-    // Configure art fetcher
-    m_artFetcher.setApiKey(m_settings.sgdbApiKey);
-
-    // Use settings dosbox path if configured
-    m_dosboxPath = m_settings.dosboxPath.empty() ? dosbox : fs::path(m_settings.dosboxPath);
-    m_confsRoot  = confsRoot;
-
-    fs::path dbPath = dataDir / "autodos2.db";
-    if (!m_db.open(dbPath)) return false;
-
-    refreshLibrary();
-    m_running = true;
+    m_loaded = true;
     return true;
 }
 
-void App::refreshLibrary()
+const GameEntry* GameDatabase::bySlug(const std::string& slug) const
 {
-    m_allGames = m_db.getAll();
-    applySearch();
+    auto it = m_bySlug.find(slug);
+    return it != m_bySlug.end() ? &it->second : nullptr;
 }
 
-void App::applySearch()
+const GameEntry* GameDatabase::byExe(const std::string& exeName) const
 {
-    std::string q = m_searchBuf;
-    std::transform(q.begin(),q.end(),q.begin(),::tolower);
-    if (q.empty()) { m_filtered=m_allGames; return; }
-    m_filtered.clear();
-    for (auto& g : m_allGames) {
-        std::string t=g.title;
-        std::transform(t.begin(),t.end(),t.begin(),::tolower);
-        if (t.find(q)!=std::string::npos) m_filtered.push_back(g);
+    auto it = m_exeToSlug.find(toUpper(exeName));
+    if (it == m_exeToSlug.end()) return nullptr;
+    return bySlug(it->second);
+}
+
+// ── run7za ────────────────────────────────────────────────────────────────────
+
+std::string Ingestor::run7za(const std::string& args) const
+{
+#ifdef _WIN32
+    if (m_7zaPath.empty()) return "";
+    std::string cmd = "\"" + m_7zaPath.string() + "\" " + args;
+
+    SECURITY_ATTRIBUTES sa = { sizeof(sa), nullptr, TRUE };
+    HANDLE hRead = nullptr, hWrite = nullptr;
+    if (!CreatePipe(&hRead, &hWrite, &sa, 0)) return "";
+    SetHandleInformation(hRead, HANDLE_FLAG_INHERIT, 0);
+
+    STARTUPINFOA si   = { sizeof(si) };
+    si.dwFlags        = STARTF_USESTDHANDLES | STARTF_USESHOWWINDOW;
+    si.hStdOutput     = hWrite;
+    si.hStdError      = hWrite;
+    si.hStdInput      = GetStdHandle(STD_INPUT_HANDLE);
+    si.wShowWindow    = SW_HIDE;
+
+    PROCESS_INFORMATION pi = {};
+    std::string out;
+
+    if (CreateProcessA(nullptr, const_cast<char*>(cmd.c_str()),
+                       nullptr, nullptr, TRUE, CREATE_NO_WINDOW,
+                       nullptr, nullptr, &si, &pi)) {
+        CloseHandle(hWrite); hWrite = nullptr;
+        char buf[4096]; DWORD n;
+        while (ReadFile(hRead, buf, sizeof(buf)-1, &n, nullptr) && n > 0) {
+            buf[n] = '\0'; out += buf;
+        }
+        WaitForSingleObject(pi.hProcess, 600000); // 10 min timeout for large archives
+        CloseHandle(pi.hProcess); CloseHandle(pi.hThread);
     }
-    bool ok=false;
-    for (auto& g:m_filtered) if (g.id==m_selected){ok=true;break;}
-    if (!ok) m_selected=-1;
+    if (hWrite) CloseHandle(hWrite);
+    CloseHandle(hRead);
+    return out;
+#else
+    (void)args;
+    return "";
+#endif
 }
 
-void App::startIngest(const std::string& path)
+// ── extract7za ────────────────────────────────────────────────────────────────
+
+bool Ingestor::extract7za(const fs::path& archive, const fs::path& outDir) const
 {
-    if (m_ingest.busy) return;
-    m_ingest.busy     = true;
-    m_ingest.progress = 0;
-    m_ingest.resultReady = false;
-    { std::lock_guard<std::mutex> lk(m_ingest.mtx); m_ingest.message="Analysing..."; m_ingest.lastError=""; }
+    fs::create_directories(outDir);
+    std::string args = "x \"" + archive.string() + "\" -o\"" + outDir.string() + "\" -y";
+    std::string out  = run7za(args);
+    return out.find("Everything is Ok") != std::string::npos
+        || out.find("Files:")            != std::string::npos
+        || out.find("extracted")         != std::string::npos;
+}
 
-    if (m_ingestThread.joinable()) m_ingestThread.join();
+// ── scanExtractedDir ──────────────────────────────────────────────────────────
 
-    m_ingestThread = std::thread([this, path]() {
-        auto setMsg = [this](const std::string& msg) {
-            std::lock_guard<std::mutex> lk(m_ingest.mtx);
-            m_ingest.message = msg;
-        };
+std::vector<Ingestor::ExeCandidate>
+Ingestor::scanExtractedDir(const fs::path& dir, const std::string& archiveStem) const
+{
+    std::vector<ExeCandidate> candidates;
+    if (!fs::exists(dir)) return candidates;
 
-        setMsg("Analysing archive...");
-        AnalyzeResult res = m_ingestor.ingest(path,
-            [this,&setMsg](int pct) {
-                m_ingest.progress = pct;
-                if (pct < 80) setMsg("Extracting...");
-                else          setMsg("Finalising...");
-            });
+    std::string stemLo = toLower(archiveStem);
+    std::error_code ec;
 
-        if (res.success) {
-            setMsg("Adding to library...");
-            GameRecord rec;
-            rec.title      = res.title;
-            rec.slug       = res.slug;
-            rec.platform   = "DOS";
-            rec.exe_path   = res.exe;
-            rec.zip_path   = path;
-            rec.cover_path = (getDataDir() / "art" / (res.slug + ".jpg")).string();
-            if (!m_db.getBySlug(res.slug).has_value())
-                m_db.insert(rec);
-
-            // Fetch cover art (runs on ingest thread, file lands in art/)
-            // CoverCache will auto-reload on next render when file exists
-            if (m_artFetcher.hasApiKey()) {
-                fs::path artPath = getDataDir() / "art" / (res.slug + ".jpg");
-                m_artFetcher.fetch(res.title, artPath);
+    std::function<void(const fs::path&, int)> walk = [&](const fs::path& d, int depth) {
+        for (auto& entry : fs::directory_iterator(d, ec)) {
+            if (entry.is_directory(ec)) {
+                // Skip DOSBOX and DOSBOX-X bundled emulator folders
+                std::string dirName = toLower(entry.path().filename().string());
+                if (dirName == "dosbox" || dirName == "dosbox-x" || dirName == "dosbx")
+                    continue;
+                walk(entry.path(), depth + 1);
+                continue;
             }
-        } else {
-            std::lock_guard<std::mutex> lk(m_ingest.mtx);
-            m_ingest.lastError = res.error;
-        }
+            if (!entry.is_regular_file(ec)) continue;
 
-        { std::lock_guard<std::mutex> lk(m_ingest.mtx); m_ingest.result=res; m_ingest.resultReady=true; }
-        m_ingest.progress = 100;
-        m_ingest.busy     = false;
-    });
+            std::string ext = toUpper(entry.path().extension().string());
+            if (!ext.empty() && ext[0] == '.') ext = ext.substr(1);
+            if (ext != "EXE" && ext != "COM" && ext != "BAT") continue;
+
+            std::string stem = toLower(entry.path().stem().string());
+            if (isBlacklisted(stem)) continue;
+
+            float score = (ext == "EXE") ? 1.0f : (ext == "BAT") ? 0.7f : 0.6f;
+            score -= depth * 0.15f;
+            if (score < 0.01f) score = 0.01f;
+
+            if (stem == stemLo || stem.find(stemLo) == 0 || stemLo.find(stem) == 0)
+                score += 0.3f;
+            if (stem == "game" || stem == "play" || stem == "start" ||
+                stem == "run"  || stem == "main" || stem == "go")
+                score += 0.15f;
+
+            fs::path rel = fs::relative(entry.path(), dir, ec);
+            candidates.push_back({rel.string(), toUpper(entry.path().filename().string()), score});
+        }
+    };
+    walk(dir, 0);
+
+    std::sort(candidates.begin(), candidates.end(),
+        [](const ExeCandidate& a, const ExeCandidate& b){ return a.score > b.score; });
+    return candidates;
 }
 
-// ── startIngestFolder ────────────────────────────────────────────────────────
+// ── analyze ───────────────────────────────────────────────────────────────────
 
-void App::startIngestFolder(const std::string& folderPath)
+AnalyzeResult Ingestor::analyze(const fs::path& archivePath) const
 {
-    if (m_ingest.busy) return;
-    m_ingest.busy     = true;
-    m_ingest.progress = 10;
-    m_ingest.resultReady = false;
-    { std::lock_guard<std::mutex> lk(m_ingest.mtx); m_ingest.message="Scanning folder..."; m_ingest.lastError=""; }
+    AnalyzeResult result;
 
-    if (m_ingestThread.joinable()) m_ingestThread.join();
+    // List archive contents via 7za
+    std::string listArgs = "l -slt \"" + archivePath.string() + "\"";
+    std::string listing  = run7za(listArgs);
 
-    m_ingestThread = std::thread([this, folderPath]() {
-        auto setMsg = [this](const std::string& msg) {
-            std::lock_guard<std::mutex> lk(m_ingest.mtx); m_ingest.message = msg;
-        };
+    if (listing.empty()) {
+        result.error = "Could not read archive (7za failed or file not found)";
+        return result;
+    }
 
-        setMsg("Identifying game...");
-        AnalyzeResult res = m_ingestor.ingestFolder(folderPath);
-        m_ingest.progress = 80;
+    // Parse file names from 7za listing
+    std::vector<std::string> exeNames;
+    std::istringstream ss(listing);
+    std::string line, currentPath;
+    bool isDir = false;
 
-        if (res.success) {
-            setMsg("Adding to library...");
-            GameRecord rec;
-            rec.title      = res.title;
-            rec.slug       = res.slug;
-            rec.platform   = "DOS";
-            rec.exe_path   = res.exe;
-            rec.zip_path   = folderPath;
-            rec.cover_path = (getDataDir() / "art" / (res.slug + ".jpg")).string();
-            if (!m_db.getBySlug(res.slug).has_value())
-                m_db.insert(rec);
-            if (m_artFetcher.hasApiKey()) {
-                fs::path artPath = getDataDir() / "art" / (res.slug + ".jpg");
-                m_artFetcher.fetch(res.title, artPath);
+    auto commit = [&]() {
+        if (currentPath.empty() || isDir) return;
+        std::replace(currentPath.begin(), currentPath.end(), '\\', '/');
+        std::string fname = currentPath;
+        size_t sl = fname.rfind('/');
+        if (sl != std::string::npos) fname = fname.substr(sl + 1);
+        std::string ext = fname.size() > 4 ? toUpper(fname.substr(fname.size() - 3)) : "";
+        if (ext == "EXE" || ext == "COM" || ext == "BAT")
+            exeNames.push_back(toUpper(fname));
+        currentPath.clear(); isDir = false;
+    };
+
+    while (std::getline(ss, line)) {
+        if (!line.empty() && line.back() == '\r') line.pop_back();
+        if (line.find("----------") == 0) { commit(); continue; }
+        size_t eq = line.find(" = ");
+        if (eq == std::string::npos) continue;
+        std::string key = line.substr(0, eq);
+        std::string val = line.substr(eq + 3);
+        while (!key.empty() && key.back() == ' ') key.pop_back();
+        while (!val.empty() && val.back() == ' ') val.pop_back();
+        if      (key == "Path")       { commit(); currentPath = val; }
+        else if (key == "Attributes") isDir = val.find('D') != std::string::npos;
+    }
+    commit();
+
+    if (exeNames.empty()) {
+        result.error = "No executable files found in archive";
+        return result;
+    }
+
+    // ── Match 1: exe filename → games.json ───────────────────────────────────
+    if (m_db) {
+        for (const auto& exeName : exeNames) {
+            std::string stemLo = toLower(exeName.substr(0, exeName.rfind('.')));
+            if (isBlacklisted(stemLo)) continue;
+
+            const GameEntry* entry = m_db->byExe(exeName);
+            if (entry) {
+                result.success     = true;
+                result.slug        = entry->slug;
+                result.title       = entry->title;
+                result.exe         = entry->exe;
+                result.workDir     = entry->workDir;
+                result.cycles      = entry->cycles;
+                result.memsize     = entry->memsize;
+                result.ems         = entry->ems;
+                result.xms         = entry->xms;
+                result.cdMount     = entry->cdMount;
+                result.installFirst= entry->installFirst;
+                result.source      = "exe_match";
+                result.confidence  = 1.0f;
+                result.gameType    = entry->cdMount ? "CD_BASED" : "SIMPLE";
+                return result;
             }
-        } else {
-            std::lock_guard<std::mutex> lk(m_ingest.mtx);
-            m_ingest.lastError = res.error;
         }
 
-        { std::lock_guard<std::mutex> lk(m_ingest.mtx); m_ingest.result=res; m_ingest.resultReady=true; }
-        m_ingest.progress = 100;
-        m_ingest.busy     = false;
-    });
-}
+        // ── Match 2: archive stem → slugify → JSON key ────────────────────────
+        std::string archiveStem = archivePath.stem().string();
+        std::string slug        = slugify(archiveStem);
+        const GameEntry* entry  = m_db->bySlug(slug);
 
-// ── Loop ──────────────────────────────────────────────────────────────────────
-
-void App::run()
-{
-    while (m_running) { processEvents(); update(); render(); }
-}
-
-void App::processEvents()
-{
-    SDL_Event e;
-    while (SDL_PollEvent(&e)) {
-        ImGui_ImplSDL2_ProcessEvent(&e);
-        if (e.type==SDL_QUIT) m_running=false;
-        if (e.type==SDL_WINDOWEVENT && e.window.event==SDL_WINDOWEVENT_CLOSE) m_running=false;
-        if (e.type==SDL_KEYDOWN && e.key.keysym.sym==SDLK_F1) m_showDemoWindow=!m_showDemoWindow;
-        if (e.type==SDL_DROPFILE) {
-            std::string dropped=e.drop.file; SDL_free(e.drop.file);
-            if (!m_ingest.busy) startIngest(dropped);
+        // Try stripping trailing year (4 digits) from slug if no match
+        if (!entry && slug.size() > 4) {
+            std::string noYear = slug;
+            // Strip trailing 4-digit year
+            bool hasYear = true;
+            for (int i = 0; i < 4; i++)
+                if (!std::isdigit((unsigned char)noYear[noYear.size()-1-i]))
+                    { hasYear = false; break; }
+            if (hasYear) {
+                noYear = noYear.substr(0, noYear.size() - 4);
+                entry = m_db->bySlug(noYear);
+                if (entry) slug = noYear;
+            }
+        }
+        if (entry) {
+            result.success     = true;
+            result.slug        = entry->slug;
+            result.title       = entry->title;
+            result.exe         = entry->exe;
+            result.workDir     = entry->workDir;
+            result.cycles      = entry->cycles;
+            result.memsize     = entry->memsize;
+            result.ems         = entry->ems;
+            result.xms         = entry->xms;
+            result.cdMount     = entry->cdMount;
+            result.installFirst= entry->installFirst;
+            result.source      = "slug_match";
+            result.confidence  = 0.9f;
+            result.gameType    = entry->cdMount ? "CD_BASED" : "SIMPLE";
+            return result;
         }
     }
-}
 
-void App::update()
-{
-    if (m_ingest.resultReady) {
-        bool ready=false;
-        { std::lock_guard<std::mutex> lk(m_ingest.mtx); ready=m_ingest.resultReady; m_ingest.resultReady=false; }
-        if (ready) refreshLibrary();
+    // ── Match 3: best scored exe ──────────────────────────────────────────────
+    std::string archiveStem = archivePath.stem().string();
+    std::string stemLo = toLower(archiveStem);
+    std::vector<std::pair<float, std::string>> scored;
+
+    for (const auto& exeName : exeNames) {
+        std::string s = toLower(exeName.substr(0, exeName.rfind('.')));
+        if (isBlacklisted(s)) continue;
+        float score = 1.0f;
+        if (s == stemLo || s.find(stemLo) == 0 || stemLo.find(s) == 0) score += 0.3f;
+        scored.push_back({score, exeName});
     }
+    std::sort(scored.begin(), scored.end(),
+        [](const auto& a, const auto& b){ return a.first > b.first; });
+
+    if (!scored.empty()) {
+        result.success    = true;
+        result.slug       = slugify(archiveStem);
+        result.title      = archiveStem;
+        result.exe        = scored[0].second;
+        result.cycles     = "max limit 80000";
+        result.memsize    = 16;
+        result.ems        = true;
+        result.xms        = true;
+        result.source     = "scored";
+        result.confidence = 0.5f;
+        result.gameType   = "SIMPLE";
+        return result;
+    }
+
+    result.error = "Could not identify game";
+    return result;
 }
 
-void App::render()
+// ── writeDosboxConf ───────────────────────────────────────────────────────────
+
+bool Ingestor::writeDosboxConf(const fs::path& extractedDir,
+                               const AnalyzeResult& result) const
 {
-    SDL_SetRenderDrawColor(m_renderer,22,22,28,255);
-    SDL_RenderClear(m_renderer);
-    ImGui_ImplSDLRenderer2_NewFrame();
-    ImGui_ImplSDL2_NewFrame();
-    ImGui::NewFrame();
-    if (m_showDemoWindow) ImGui::ShowDemoWindow(&m_showDemoWindow);
-    renderImGui();
-    ImGui::Render();
-    ImGui_ImplSDLRenderer2_RenderDrawData(ImGui::GetDrawData(),m_renderer);
-    SDL_RenderPresent(m_renderer);
-}
+    if (m_confsRoot.empty()) return false;
+    fs::create_directories(m_confsRoot);
 
-// ── Layout ────────────────────────────────────────────────────────────────────
-//
-//  ┌─────────────────────────────────────────────────────┐
-//  │  Top bar: AutoDOS2  v0.9  |  N games  |  DB: N  [⚙] [Search...]  │
-//  ├──────────┬──────────────────────────────────────────┤
-//  │ Sidebar  │  Library header + 5-col card grid        │
-//  ├──────────┴──────────────────────────────────────────┤
-//  │  Launch | Add Zip | Delete       status      N fps  │
-//  └─────────────────────────────────────────────────────┘
+    fs::path confPath = m_confsRoot / (result.slug + ".conf");
+    if (fs::exists(confPath)) return true;
 
-void App::renderImGui()
-{
-    const ImGuiIO& io = ImGui::GetIO();
-    ImGui::SetNextWindowPos({0,0});
-    ImGui::SetNextWindowSize(io.DisplaySize);
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,{0,0});
-    ImGui::Begin("##root",nullptr,
-        ImGuiWindowFlags_NoDecoration|ImGuiWindowFlags_NoMove|
-        ImGuiWindowFlags_NoSavedSettings|ImGuiWindowFlags_NoBringToFrontOnFocus);
-    ImGui::PopStyleVar();
-
-    const float topH    = 52.0f;
-    const float bottomH = 48.0f;
-    const float midH    = io.DisplaySize.y - topH - bottomH;
-
-    renderTopBar(io.DisplaySize.x);
-
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,{0,0});
-    ImGui::BeginChild("##mid",{0,midH},false,ImGuiWindowFlags_NoScrollbar);
-    ImGui::PopStyleVar();
-    renderSidebar();
-    ImGui::SameLine(0,0);
-    renderGrid();
-    ImGui::EndChild();
-
-    renderBottomBar(io.DisplaySize.x);
-    ImGui::End();
-
-    if (m_launchState == LaunchState::Error) renderLaunchError();
-    if (m_ingest.busy || m_ingest.progress > 0) renderIngestOverlay();
-    if (m_showSettings) renderSettingsPanel();
-    if (m_showAbout)    renderAboutPanel();
-}
-
-// ── Top bar ───────────────────────────────────────────────────────────────────
-
-void App::renderTopBar(float winW)
-{
-    ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4{0.060f,0.060f,0.080f,1.0f});
-    ImGui::BeginChild("##top",{0,52},false,ImGuiWindowFlags_NoScrollbar);
-    ImGui::PopStyleColor();
-
-    // Left: title + stats
-    ImGui::SetCursorPos({16,14});
-    ImGui::TextColored(ACCENT,"AutoDOS2");
-    ImGui::SameLine();
-    ImGui::SetCursorPosY(14);
-    ImGui::TextDisabled("v%d.%d  |  %d games  |  DB: %d entries",
-        AUTODOS2_VERSION_MAJOR, AUTODOS2_VERSION_MINOR,
-        (int)m_allGames.size(), m_gameJson.count());
-
-    // Right: gear + search
-    const float searchW = 240.0f;
-    const float gearW   = 28.0f;
-    const float rightX  = winW - searchW - gearW - 28.0f;
-
-    // Gear button — simple cog drawn with DrawList
-    ImGui::SetCursorPos({rightX, 12});
-    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4{0,0,0,0});
-    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4{0.2f,0.2f,0.25f,1.0f});
-    ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4{0.3f,0.3f,0.38f,1.0f});
-    bool gearClicked = ImGui::Button("##gear", {gearW, 28});
-    ImGui::PopStyleColor(3);
-
-    // Draw gear icon on the button
+    // Exe name only (strip path prefix)
+    std::string exeName = result.exe;
     {
-        ImVec2 c = {rightX + gearW*0.5f, 12 + 14.0f};
-        // Get window pos to convert to screen coords
-        ImVec2 wpos = ImGui::GetWindowPos();
-        c.x += wpos.x;
-        c.y += wpos.y;
-        ImDrawList* dl = ImGui::GetWindowDrawList();
-        const float R = 7.0f, r = 4.5f, tr = 2.5f;
-        const int teeth = 8;
-        ImU32 col = m_showSettings ? ACCENT32 : IM_COL32(180,180,190,255);
-
-        // Draw teeth
-        for (int i = 0; i < teeth; i++) {
-            float a0 = (float)i / teeth * 6.2832f - 0.3f;
-            float a1 = (float)i / teeth * 6.2832f + 0.3f;
-            dl->AddLine({c.x+cosf(a0)*r, c.y+sinf(a0)*r},
-                        {c.x+cosf(a0)*R, c.y+sinf(a0)*R}, col, 2.0f);
-            dl->AddLine({c.x+cosf(a1)*r, c.y+sinf(a1)*r},
-                        {c.x+cosf(a1)*R, c.y+sinf(a1)*R}, col, 2.0f);
-        }
-        // Inner circle
-        dl->AddCircle(c, r, col, 16, 1.5f);
+        size_t sl = exeName.find_last_of("/\\");
+        if (sl != std::string::npos) exeName = exeName.substr(sl + 1);
     }
 
-    if (gearClicked) m_showSettings = !m_showSettings;
+    // ── Find all ISO/CUE/MDF images in extracted dir ─────────────────────────
+    // Skip bundled emulator subfolders (dosbox, dosbox-x) and pre-mounted
+    // C: drive subfolders (DOSBox-X style zips with a C\ subfolder)
+    std::vector<std::string> isoFiles;
+    {
+        std::error_code ec;
+        for (auto& f : fs::recursive_directory_iterator(extractedDir, ec)) {
+            if (!f.is_regular_file(ec)) continue;
+            // Skip files inside bundled emulator folders
+            std::string pathStr = toLower(f.path().string());
+            bool skip = false;
+            for (auto& seg : f.path()) {
+                std::string s = toLower(seg.string());
+                if (s == "dosbox" || s == "dosbox-x" || s == "dosboxx")
+                    { skip = true; break; }
+            }
+            if (skip) continue;
+            std::string ext = toUpper(f.path().extension().string());
+            if (ext == ".ISO" || ext == ".CUE" || ext == ".MDF")
+                isoFiles.push_back(f.path().string());
+        }
+        std::sort(isoFiles.begin(), isoFiles.end());
+    }
 
-    // Search bar
-    ImGui::SetCursorPos({rightX + gearW + 8.0f, 12});
-    ImGui::SetNextItemWidth(searchW);
-    ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 20.0f);
-    if (ImGui::InputTextWithHint("##search","Search Games...",
-            m_searchBuf,sizeof(m_searchBuf)))
-        applySearch();
-    ImGui::PopStyleVar();
+    // ── Find exe location on disk ─────────────────────────────────────────────
+    std::string mountDir = extractedDir.string();
+    {
+        std::error_code ec;
+        std::string exeUp = toUpper(exeName);
+        bool found = false;
 
-    ImGui::EndChild();
+        for (auto& f : fs::recursive_directory_iterator(extractedDir, ec)) {
+            if (!f.is_regular_file(ec)) continue;
+            if (toUpper(f.path().filename().string()) == exeUp) {
+                mountDir = f.path().parent_path().string();
+                found = true;
+                break;
+            }
+        }
 
-    // Bottom divider
-    ImDrawList* dl = ImGui::GetWindowDrawList();
-    ImVec2 p = ImGui::GetCursorScreenPos();
-    dl->AddLine(p,{p.x+winW,p.y},IM_COL32(45,45,58,255),1.0f);
+        if (!found) {
+            auto candidates = scanExtractedDir(extractedDir, result.slug);
+            if (!candidates.empty()) {
+                fs::path bestExe = extractedDir / candidates[0].relPath;
+                exeName  = candidates[0].name;
+                mountDir = bestExe.parent_path().string();
+            }
+        }
+    }
+
+    std::string cycles  = result.cycles.empty() ? "max limit 80000" : result.cycles;
+    int         memsize = result.memsize > 0 ? result.memsize : 16;
+
+    std::ostringstream autoexec;
+    autoexec << "@echo off\r\n";
+
+    if (result.cdMount && !isoFiles.empty()) {
+        // ── CD-based game ─────────────────────────────────────────────────────
+        // Mount C: as a writable drive for saves, D: as the CD
+        autoexec << "mount C \"" << mountDir << "\"\r\n";
+
+        if (isoFiles.size() == 1) {
+            // Single disc
+            autoexec << "imgmount D \"" << isoFiles[0] << "\" -t iso\r\n";
+            autoexec << "C:\r\n";
+            autoexec << exeName << "\r\n";
+        } else {
+            // Multi-disc — mount all ISOs as a swappable disc set
+            // DOSBox Staging supports multiple images on one imgmount line
+            autoexec << "imgmount D";
+            for (auto& iso : isoFiles)
+                autoexec << " \"" << iso << "\"";
+            autoexec << " -t iso\r\n";
+            autoexec << "C:\r\n";
+            autoexec << exeName << "\r\n";
+        }
+    } else if (result.cdMount && isoFiles.empty()) {
+        // cd_mount=true but no ISO found — game exe is on the C: drive,
+        // CD is just for music/video. Mount C: normally.
+        autoexec << "mount C \"" << mountDir << "\"\r\n";
+        autoexec << "C:\r\n";
+        autoexec << exeName << "\r\n";
+    } else {
+        // Standard non-CD game
+        autoexec << "mount C \"" << mountDir << "\"\r\n";
+        autoexec << "C:\r\n";
+        autoexec << exeName << "\r\n";
+    }
+
+    autoexec << "exit\r\n";
+
+    std::ostringstream conf;
+    conf << "[sdl]\r\nfullscreen=true\r\nfullresolution=desktop\r\noutput=openglnb\r\n\r\n";
+    conf << "[dosbox]\r\nmachine=svga_s3\r\nmemsize=" << memsize << "\r\n\r\n";
+    conf << "[cpu]\r\ncore=dynamic\r\ncputype=pentium_slow\r\ncycles=" << cycles << "\r\n";
+    conf << "cycleup=500\r\ncycledown=20\r\n\r\n";
+    conf << "[dos]\r\nems=" << (result.ems ? "true" : "false") << "\r\n";
+    conf << "xms=" << (result.xms ? "true" : "false") << "\r\n\r\n";
+    conf << "[mixer]\r\nrate=44100\r\nblocksize=1024\r\nprebuffer=20\r\n\r\n";
+    conf << "[render]\r\nframeskip=0\r\naspect=true\r\n\r\n";
+    conf << "[autoexec]\r\n" << autoexec.str() << "\r\n";
+
+    std::ofstream out(confPath);
+    if (!out.is_open()) return false;
+    out << conf.str();
+    return true;
+}
+// ── ingest — full pipeline ────────────────────────────────────────────────────
+
+AnalyzeResult Ingestor::ingest(const fs::path& archivePath, ProgressFn progress)
+{
+    AnalyzeResult result = analyze(archivePath);
+    if (!result.success) return result;
+
+    if (progress) progress(5);
+
+    // Extract
+    fs::path extractDir = m_extractRoot / result.slug;
+    if (!fs::exists(extractDir) || fs::is_empty(extractDir)) {
+        if (!extract7za(archivePath, extractDir)) {
+            result.success = false;
+            result.error   = "Extraction failed";
+            return result;
+        }
+    }
+
+    if (progress) progress(80);
+
+    // Auto-copy DOS4GW.EXE into every game folder
+    if (!m_dos4gwPath.empty()) {
+        std::error_code ec;
+        fs::path dst = extractDir / "DOS4GW.EXE";
+        if (!fs::exists(dst)) fs::copy_file(m_dos4gwPath, dst, ec);
+    }
+
+    if (progress) progress(90);
+
+    // Always generate our own DOSBox Staging conf.
+    // Bundled confs from zips are ignored — they target DOSBox-X or old
+    // DOSBox SVN and use relative paths that break outside their original tree.
+    writeDosboxConf(extractDir, result);
+
+    if (progress) progress(100);
+    return result;
 }
 
-// ── Sidebar ───────────────────────────────────────────────────────────────────
+// ── ingestFolder — for pre-extracted CD/ISO games ─────────────────────────────
+// User unzipped the game themselves and points us at the folder.
+// We scan for ISOs/EXEs, match games.json, write conf, no extraction needed.
 
-void App::renderSidebar()
+AnalyzeResult Ingestor::ingestFolder(const fs::path& folderPath)
 {
-    const float sideW = 200.0f;
-    ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4{0.072f,0.072f,0.094f,1.0f});
-    ImGui::BeginChild("##sidebar",{sideW,0},false,ImGuiWindowFlags_NoScrollbar);
-    ImGui::PopStyleColor();
+    AnalyzeResult result;
 
-    const GameRecord* sel = nullptr;
-    for (auto& g:m_filtered) if (g.id==m_selected){sel=&g;break;}
+    if (!fs::exists(folderPath) || !fs::is_directory(folderPath)) {
+        result.error = "Folder not found: " + folderPath.string();
+        return result;
+    }
 
-    ImGui::SetCursorPos({12, 16});
+    // Use the folder name as the slug hint
+    std::string folderName = folderPath.filename().string();
+    std::string slug       = slugify(folderName);
 
-    if (sel) {
-        // Selected game info
-        ImGui::PushTextWrapPos(sideW - 12);
-        ImGui::TextColored(ACCENT, "%s", sel->title.c_str());
-        ImGui::Spacing();
-        ImGui::TextDisabled("Played: %d times", sel->play_count);
-        if (!sel->last_played.empty())
-            ImGui::TextDisabled("Last: %.10s", sel->last_played.c_str());
-        ImGui::PopTextWrapPos();
+    // ── Step 1: collect all EXEs and ISOs recursively ──────────────────────
+    std::vector<std::string> exeNames;
+    std::vector<std::string> isoFiles;
+    std::error_code ec;
 
-        // CD game hint
-        {
-            fs::path confPath = m_confsRoot / (sel->slug + ".conf");
-            if (fs::exists(confPath)) {
-                std::ifstream cf(confPath);
-                std::string line, confStr;
-                while (std::getline(cf, line)) confStr += line;
-                int discCount = 0;
-                size_t pos = 0;
-                while ((pos = confStr.find(".iso", pos)) != std::string::npos)
-                    { ++discCount; pos += 4; }
-                if (discCount > 1) {
-                    ImGui::Spacing();
-                    ImGui::TextColored({0.314f,0.784f,0.471f,0.9f},
-                        "%d disc game", discCount);
-                    ImGui::PushTextWrapPos(sideW-10);
-                    ImGui::TextDisabled("Press Ctrl+F4 when the game asks to swap discs.");
-                    ImGui::PopTextWrapPos();
+    for (auto& f : fs::recursive_directory_iterator(folderPath, ec)) {
+        if (!f.is_regular_file(ec)) continue;
+        std::string ext = toUpper(f.path().extension().string());
+        std::string fnUp = toUpper(f.path().filename().string());
+
+        // Skip bundled emulator folders
+        bool skip = false;
+        for (auto& seg : f.path())
+            if (toLower(seg.string()) == "dosbox" || toLower(seg.string()) == "dosbox-x")
+                { skip = true; break; }
+        if (skip) continue;
+
+        if (ext == ".EXE" || ext == ".COM" || ext == ".BAT")
+            exeNames.push_back(fnUp);
+        else if (ext == ".ISO" || ext == ".CUE" || ext == ".MDF")
+            isoFiles.push_back(f.path().string());
+    }
+    std::sort(isoFiles.begin(), isoFiles.end());
+
+    // ── Step 2: match against games.json ───────────────────────────────────
+    const GameEntry* entry = nullptr;
+
+    // Try exe match first
+    if (m_db) {
+        for (auto& exeName : exeNames) {
+            std::string s = toLower(exeName.substr(0, exeName.rfind('.')));
+            if (isBlacklisted(s)) continue;
+            entry = m_db->byExe(exeName);
+            if (entry) break;
+        }
+        // Try slug match
+        if (!entry) entry = m_db->bySlug(slug);
+        // Try stripping year
+        if (!entry && slug.size() > 4 && slug.back() >= '0' && slug.back() <= '9') {
+            std::string noYear = slug.substr(0, slug.size() - 4);
+            entry = m_db->bySlug(noYear);
+            if (entry) slug = noYear;
+        }
+    }
+
+    if (entry) {
+        result.slug        = entry->slug;
+        result.title       = entry->title;
+        result.exe         = entry->exe;
+        result.workDir     = entry->workDir;
+        result.cycles      = entry->cycles;
+        result.memsize     = entry->memsize;
+        result.ems         = entry->ems;
+        result.xms         = entry->xms;
+        result.cdMount     = entry->cdMount;
+        result.installFirst= entry->installFirst;
+        result.source      = "exe_match";
+        result.confidence  = 1.0f;
+    } else {
+        // Unknown game — use folder name as title
+        result.slug       = slug;
+        result.title      = folderName;
+        result.source     = "scored";
+        result.confidence = 0.5f;
+        result.cdMount    = !isoFiles.empty();
+
+        // Pick best exe
+        auto candidates = scanExtractedDir(folderPath, folderName);
+        if (!candidates.empty()) result.exe = candidates[0].name;
+    }
+
+    result.gameType = isoFiles.empty() ? "SIMPLE" : "CD_BASED";
+
+    // ── Step 3: symlink/copy the folder into extractRoot ───────────────────
+    // Instead of extracting, we just point the conf at the original folder.
+    // We still create a stub entry in extractRoot so the rest of the pipeline
+    // works (conf lives next to it, art lives in art/).
+    fs::path extractDir = m_extractRoot / result.slug;
+    if (!fs::exists(extractDir)) {
+        // Create a small marker file so we know this is a folder-linked game
+        fs::create_directories(extractDir, ec);
+        std::ofstream marker(extractDir / ".folder_link");
+        marker << folderPath.string();
+    }
+
+    // ── Step 4: write conf pointing at the ORIGINAL folder ─────────────────
+    // Override extractedDir with the user's actual folder path
+    fs::path confPath = m_confsRoot / (result.slug + ".conf");
+    if (!fs::exists(confPath)) {
+        // Build the conf manually — use the original folder path as mount point
+        std::string mountDir = folderPath.string();
+
+        // Find exe on disk if db entry has one
+        if (!result.exe.empty()) {
+            std::error_code ec2;
+            std::string exeUp = toUpper(result.exe);
+            for (auto& f : fs::recursive_directory_iterator(folderPath, ec2)) {
+                if (!f.is_regular_file(ec2)) continue;
+                if (toUpper(f.path().filename().string()) == exeUp) {
+                    mountDir = f.path().parent_path().string();
+                    break;
                 }
             }
         }
 
-        ImGui::Spacing();
-        ImGui::Separator();
-        ImGui::Spacing();
+        std::string cycles  = result.cycles.empty() ? "max limit 80000" : result.cycles;
+        int         memsize = result.memsize > 0 ? result.memsize : 16;
+        std::string exeName = result.exe;
+        { size_t sl=exeName.find_last_of("/\\"); if(sl!=std::string::npos) exeName=exeName.substr(sl+1); }
 
-        // Hotkey reference
-        ImGui::TextColored(ACCENT, "Hotkeys");
-        ImGui::Spacing();
+        std::ostringstream autoexec;
+        autoexec << "@echo off\r\n";
+        autoexec << "mount C \"" << mountDir << "\"\r\n";
 
-        auto hk = [&](const char* key, const char* desc) {
-            ImGui::SetCursorPosX(12);
-            ImGui::TextColored({0.314f,0.784f,0.471f,0.85f}, "%s", key);
-            ImGui::SameLine(95);
-            ImGui::TextDisabled("%s", desc);
-        };
-        hk("Alt+Enter", "Fullscreen");
-        hk("Ctrl+F10",  "Mouse lock");
-        hk("Ctrl+F11",  "Speed -");
-        hk("Ctrl+F12",  "Speed +");
-        hk("Ctrl+F4",   "Swap disc");
-        hk("Ctrl+F7",   "Screenshot");
-        hk("Ctrl+F9",   "Quit game");
-    } else {
-        // Library overview
-        ImGui::TextColored(ACCENT, "Library");
-        ImGui::SetCursorPosX(12);
-        ImGui::TextDisabled("%d games", (int)m_allGames.size());
-        ImGui::Spacing();
-        ImGui::SetCursorPosX(12);
-        ImGui::Separator();
-        ImGui::Spacing();
-        ImGui::SetCursorPosX(12);
-        ImGui::TextColored({0.314f,0.784f,0.471f,0.7f}, "Library");
-        ImGui::Spacing();
-        ImGui::SetCursorPosX(12);
-        ImGui::TextDisabled("Drag a DOS zip\nonto the window\nto add a game.");
+        if (!isoFiles.empty()) {
+            autoexec << "imgmount D";
+            for (auto& iso : isoFiles) autoexec << " \"" << iso << "\"";
+            autoexec << " -t iso\r\n";
+        }
+
+        autoexec << "C:\r\n";
+        if (!exeName.empty()) autoexec << exeName << "\r\n";
+        autoexec << "exit\r\n";
+
+        std::ostringstream conf;
+        conf << "[sdl]\r\nfullscreen=true\r\nfullresolution=desktop\r\noutput=openglnb\r\n\r\n";
+        conf << "[dosbox]\r\nmachine=svga_s3\r\nmemsize=" << memsize << "\r\n\r\n";
+        conf << "[cpu]\r\ncore=dynamic\r\ncputype=pentium_slow\r\ncycles=" << cycles << "\r\n";
+        conf << "cycleup=500\r\ncycledown=20\r\n\r\n";
+        conf << "[dos]\r\nems=" << (result.ems?"true":"false") << "\r\n";
+        conf << "xms=" << (result.xms?"true":"false") << "\r\n\r\n";
+        conf << "[mixer]\r\nrate=44100\r\nblocksize=1024\r\nprebuffer=20\r\n\r\n";
+        conf << "[render]\r\nframeskip=0\r\naspect=true\r\n\r\n";
+        conf << "[autoexec]\r\n" << autoexec.str() << "\r\n";
+
+        fs::create_directories(m_confsRoot, ec);
+        std::ofstream out(confPath);
+        if (out.is_open()) out << conf.str();
     }
 
-    // Right border line
-    ImDrawList* dl = ImGui::GetWindowDrawList();
-    ImVec2 tl = ImGui::GetWindowPos();
-    float  h  = ImGui::GetWindowHeight();
-    dl->AddLine({tl.x+sideW-1,tl.y},{tl.x+sideW-1,tl.y+h},
-        IM_COL32(45,45,58,255),1.0f);
-
-    ImGui::EndChild();
-}
-
-// ── Grid ──────────────────────────────────────────────────────────────────────
-
-void App::renderGrid()
-{
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,{CARD_PAD,CARD_PAD});
-    ImGui::BeginChild("##gridouter",{0,0},false);
-    ImGui::PopStyleVar();
-
-    // "Library" header
-    ImGui::SetCursorPosX(CARD_PAD);
-    ImGui::TextColored(ACCENT, "Library");
-
-    ImGui::Spacing();
-
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,{CARD_PAD,0});
-    ImGui::BeginChild("##gridinner",{0,0},false);
-    ImGui::PopStyleVar();
-
-    const float availW = ImGui::GetContentRegionAvail().x;
-    const int   cols   = std::max(1,(int)((availW+CARD_PAD)/(CARD_W+CARD_PAD)));
-    const float imgH   = CARD_H * 0.76f;
-    const float lblH   = CARD_H - imgH;
-    ImDrawList* dl     = ImGui::GetWindowDrawList();
-
-    for (int i=0;i<(int)m_filtered.size();++i) {
-        const GameRecord& g = m_filtered[i];
-        const bool sel = (g.id==m_selected);
-        if (i%cols!=0) ImGui::SameLine(0,CARD_PAD);
-        ImGui::PushID(g.id);
-
-        ImVec2 pos = ImGui::GetCursorScreenPos();
-        ImGui::InvisibleButton("##card",{CARD_W,CARD_H});
-        bool hov = ImGui::IsItemHovered();
-        if (ImGui::IsItemClicked()) m_selected = sel?-1:g.id;
-        if (ImGui::IsMouseDoubleClicked(0) && hov) launchGame(g);
-
-        ImU32 bg = sel
-            ? IM_COL32(36,60,46,255)
-            : hov ? IM_COL32(32,38,42,255)
-                  : IM_COL32(22,24,32,255);
-        dl->AddRectFilled(pos,{pos.x+CARD_W,pos.y+CARD_H},bg,10.0f);
-
-        SDL_Texture* tex = m_covers.get(g.cover_path);
-        if (tex) dl->AddImage(reinterpret_cast<ImTextureID>(tex),
-            pos,{pos.x+CARD_W,pos.y+imgH},
-            {0,0},{1,1},IM_COL32(255,255,255,240));
-
-        // Gradient
-        dl->AddRectFilledMultiColor(
-            {pos.x,pos.y+imgH-28.0f},{pos.x+CARD_W,pos.y+CARD_H},
-            IM_COL32(0,0,0,0),IM_COL32(0,0,0,0),
-            IM_COL32(0,0,0,230),IM_COL32(0,0,0,230));
-
-        // Title
-        ImVec2 tp = {pos.x+8.0f, pos.y+imgH+(lblH-14.0f)*0.3f};
-        dl->AddText(nullptr,0,tp,IM_COL32(230,230,230,255),
-            g.title.c_str(),nullptr,CARD_W-10.0f);
-
-        if (sel)
-            dl->AddRect(pos,{pos.x+CARD_W,pos.y+CARD_H},ACCENT32,10.0f,0,2.5f);
-        else if (hov)
-            dl->AddRect(pos,{pos.x+CARD_W,pos.y+CARD_H},ACCENT32DIM,10.0f,0,1.5f);
-
-        ImGui::PopID();
-    }
-
-    if (m_filtered.empty()) {
-        ImGui::SetCursorPosY(80);
-        const char* msg = m_allGames.empty()
-            ? "No games yet — drag a DOS zip onto the window"
-            : "No games match your search";
-        float tw = ImGui::CalcTextSize(msg).x;
-        ImGui::SetCursorPosX((ImGui::GetContentRegionAvail().x-tw)*0.5f);
-        ImGui::TextDisabled("%s",msg);
-    }
-
-    ImGui::EndChild();
-    ImGui::EndChild();
-}
-
-// ── Bottom bar ────────────────────────────────────────────────────────────────
-
-void App::renderBottomBar(float winW)
-{
-    ImGui::PushStyleColor(ImGuiCol_ChildBg,ImVec4{0.060f,0.060f,0.080f,1.0f});
-    ImGui::BeginChild("##bot",{0,0},false,ImGuiWindowFlags_NoScrollbar);
-    ImGui::PopStyleColor();
-
-    ImDrawList* dl = ImGui::GetWindowDrawList();
-    ImVec2 p = ImGui::GetWindowPos();
-    dl->AddLine(p,{p.x+winW,p.y},IM_COL32(45,45,58,255),1.0f);
-
-    ImGui::SetCursorPos({12,10});
-
-    const GameRecord* sel=nullptr;
-    for (auto& g:m_filtered) if (g.id==m_selected){sel=&g;break;}
-    const bool hasSel=(sel!=nullptr);
-    const bool busy=m_ingest.busy.load();
-
-    // Launch — green
-    ImGui::PushStyleColor(ImGuiCol_Button,       IM_COL32(28,68,42,255));
-    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, IM_COL32(48,108,68,255));
-    ImGui::PushStyleColor(ImGuiCol_ButtonActive,  IM_COL32(80,200,120,255));
-    if (!hasSel) ImGui::BeginDisabled();
-    if (ImGui::Button("  Launch  ")) { if(sel) launchGame(*sel); }
-    if (!hasSel) ImGui::EndDisabled();
-    ImGui::PopStyleColor(3);
-
-    ImGui::SameLine(0,8);
-    if (busy) ImGui::BeginDisabled();
-    if (ImGui::Button("  Add Zip  ")) {
-        auto path = openFileDialog("Archives","*.zip;*.7z;*.rar");
-        if (!path.empty()) startIngest(path.string());
-    }
-    ImGui::SameLine(0,4);
-    if (ImGui::Button("  Add Folder  ")) {
-        auto path = openFolderDialog();
-        if (!path.empty()) startIngestFolder(path.string());
-    }
-    if (busy) ImGui::EndDisabled();
-
-    ImGui::SameLine(0,8);
-    ImGui::PushStyleColor(ImGuiCol_Button,       IM_COL32(68,28,28,255));
-    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, IM_COL32(108,48,48,255));
-    ImGui::PushStyleColor(ImGuiCol_ButtonActive,  IM_COL32(200,80,80,255));
-    if (!hasSel) ImGui::BeginDisabled();
-    if (ImGui::Button("  Delete  ")) {
-        if (sel) { m_db.remove(sel->id); m_selected=-1; refreshLibrary(); }
-    }
-    if (!hasSel) ImGui::EndDisabled();
-    ImGui::PopStyleColor(3);
-
-    ImGui::SameLine();
-    if (sel)
-        ImGui::TextDisabled("  %s", sel->title.c_str());
-    else
-        ImGui::TextDisabled("  Drag a DOS zip to add  |  Double-click to launch");
-
-    // FPS right-aligned
-    char fpsBuf[32];
-    snprintf(fpsBuf, sizeof(fpsBuf), "%.0f FPS", ImGui::GetIO().Framerate);
-    float fpsW = ImGui::CalcTextSize(fpsBuf).x;
-    ImGui::SameLine(winW - fpsW - 16);
-    ImGui::TextDisabled("%s", fpsBuf);
-
-    ImGui::EndChild();
-}
-
-// ── Ingest overlay ────────────────────────────────────────────────────────────
-
-void App::renderIngestOverlay()
-{
-    const ImGuiIO& io = ImGui::GetIO();
-    ImGui::SetNextWindowPos({io.DisplaySize.x*0.5f,io.DisplaySize.y*0.5f},
-        ImGuiCond_Always,{0.5f,0.5f});
-    ImGui::SetNextWindowSize({360,110});
-    ImGui::SetNextWindowBgAlpha(0.93f);
-    ImGui::Begin("##ingest",nullptr,
-        ImGuiWindowFlags_NoDecoration|ImGuiWindowFlags_NoMove|
-        ImGuiWindowFlags_NoSavedSettings|ImGuiWindowFlags_NoBringToFrontOnFocus);
-
-    std::string msg,err;
-    { std::lock_guard<std::mutex> lk(m_ingest.mtx); msg=m_ingest.message; err=m_ingest.lastError; }
-    int pct=m_ingest.progress.load();
-
-    if (!err.empty()) {
-        ImGui::TextColored({1.0f,0.4f,0.4f,1.0f},"Error:");
-        ImGui::PushTextWrapPos(340);
-        ImGui::TextWrapped("%s",err.c_str());
-        ImGui::PopTextWrapPos();
-        ImGui::Spacing();
-        if (ImGui::Button("OK",{80,0})) m_ingest.progress=0;
-    } else {
-        ImGui::TextColored(ACCENT,"Adding game...");
-        ImGui::Spacing();
-        ImGui::TextDisabled("%s",msg.c_str());
-        ImGui::Spacing();
-        ImGui::ProgressBar(pct/100.0f,{-1,0});
-    }
-    ImGui::End();
-}
-
-// ── Launch ────────────────────────────────────────────────────────────────────
-
-void App::launchGame(const GameRecord& rec)
-{
-    if (m_dosboxPath.empty() || !fs::exists(m_dosboxPath)) {
-        m_launchState = LaunchState::Error;
-        m_launchError = "DOSBox not found.\n\nPlace dosbox.exe inside the dosbox\\ folder next to AutoDOS2.exe.";
-        return;
-    }
-
-    fs::path confPath = m_confsRoot / (rec.slug + ".conf");
-    if (!fs::exists(confPath)) {
-        m_launchState = LaunchState::Error;
-        m_launchError = "No .conf found for: " + rec.title + "\n\nTry removing and re-adding the game.";
-        return;
-    }
-
-#ifdef _WIN32
-    std::string cmd = "\"" + m_dosboxPath.string() + "\" -conf \"" + confPath.string() + "\"";
-
-    STARTUPINFOA si        = { sizeof(si) };
-    PROCESS_INFORMATION pi = {};
-    si.dwFlags             = STARTF_USESHOWWINDOW;
-    si.wShowWindow         = SW_SHOWNORMAL;
-
-    if (!CreateProcessA(nullptr,const_cast<char*>(cmd.c_str()),
-                        nullptr,nullptr,FALSE,0,nullptr,nullptr,&si,&pi)) {
-        m_launchState = LaunchState::Error;
-        m_launchError = "Failed to launch DOSBox.\nCommand: " + cmd;
-        return;
-    }
-
-    m_launchState = LaunchState::Running;
-    m_db.recordPlay(rec.id);
-    refreshLibrary();
-
-    SDL_SysWMinfo wmInfo = {};
-    SDL_VERSION(&wmInfo.version);
-    HWND hWnd = nullptr;
-    if (SDL_GetWindowWMInfo(m_window,&wmInfo)) hWnd = wmInfo.info.win.window;
-
-    CloseHandle(pi.hThread);
-    HANDLE hProc = pi.hProcess;
-
-    std::thread([this,hProc,hWnd]() {
-        WaitForSingleObject(hProc,INFINITE);
-        CloseHandle(hProc);
-        m_launchState = LaunchState::Idle;
-        if (hWnd) { SetForegroundWindow(hWnd); ShowWindow(hWnd,SW_RESTORE); }
-    }).detach();
-#else
-    (void)rec;
-    m_launchState = LaunchState::Error;
-    m_launchError = "Launch not yet implemented on this platform.";
-#endif
-}
-
-void App::renderLaunchError()
-{
-    const ImGuiIO& io = ImGui::GetIO();
-    ImGui::SetNextWindowPos({io.DisplaySize.x*0.5f,io.DisplaySize.y*0.5f},
-        ImGuiCond_Always,{0.5f,0.5f});
-    ImGui::SetNextWindowSize({400,160});
-    ImGui::SetNextWindowBgAlpha(0.95f);
-    ImGui::Begin("##launcherr",nullptr,
-        ImGuiWindowFlags_NoDecoration|ImGuiWindowFlags_NoMove|
-        ImGuiWindowFlags_NoSavedSettings);
-    ImGui::TextColored({1.0f,0.4f,0.4f,1.0f},"Launch Error");
-    ImGui::Separator(); ImGui::Spacing();
-    ImGui::PushTextWrapPos(380);
-    ImGui::TextWrapped("%s",m_launchError.c_str());
-    ImGui::PopTextWrapPos();
-    ImGui::Spacing();
-    if (ImGui::Button("OK",{80,0})) m_launchState=LaunchState::Idle;
-    ImGui::End();
-}
-
-// ── Settings panel ────────────────────────────────────────────────────────────
-
-void App::renderSettingsPanel()
-{
-    const ImGuiIO& io = ImGui::GetIO();
-    ImGui::SetNextWindowPos({io.DisplaySize.x*0.5f,io.DisplaySize.y*0.5f},
-        ImGuiCond_Always,{0.5f,0.5f});
-    ImGui::SetNextWindowSize({520,380});
-    ImGui::Begin("Settings",&m_showSettings,
-        ImGuiWindowFlags_NoResize|ImGuiWindowFlags_NoCollapse);
-
-    ImGui::TextColored(ACCENT,"DOSBox Staging");
-    ImGui::Separator(); ImGui::Spacing();
-
-    static char dosboxBuf[512] = {};
-    if (dosboxBuf[0]=='\0') strncpy(dosboxBuf,m_settings.dosboxPath.c_str(),511);
-    ImGui::Text("Path:");
-    ImGui::SetNextItemWidth(-88);
-    ImGui::InputText("##dosbox",dosboxBuf,sizeof(dosboxBuf));
-    ImGui::SameLine();
-    if (ImGui::Button("Browse##db",{80,0})) {
-        auto p=openFileDialog("Executable","*.exe");
-        if (!p.empty()) strncpy(dosboxBuf,p.string().c_str(),511);
-    }
-
-    ImGui::Spacing();
-    ImGui::TextColored(ACCENT,"Defaults");
-    ImGui::Separator(); ImGui::Spacing();
-
-    static char cyclesBuf[64] = {};
-    if (cyclesBuf[0]=='\0') strncpy(cyclesBuf,m_settings.defaultCycles.c_str(),63);
-    ImGui::Text("Cycles:");
-    ImGui::SetNextItemWidth(220);
-    ImGui::InputText("##cycles",cyclesBuf,sizeof(cyclesBuf));
-    ImGui::SameLine(); ImGui::TextDisabled("auto / max / max limit 80000 / 30000");
-
-
-    ImGui::Spacing();
-    ImGui::TextColored(ACCENT,"Cover Art");
-    ImGui::Separator(); ImGui::Spacing();
-
-    static char sgdbBuf[128] = {};
-    if (sgdbBuf[0]=='\0') strncpy(sgdbBuf, m_settings.sgdbApiKey.c_str(), 127);
-    ImGui::Text("SteamGridDB API key:");
-    ImGui::SetNextItemWidth(-1);
-    ImGui::InputText("##sgdb", sgdbBuf, sizeof(sgdbBuf),
-        ImGuiInputTextFlags_Password);
-    ImGui::TextDisabled("Get a free key at steamgriddb.com");
-    ImGui::SameLine();
-    if (ImGui::SmallButton("Open in browser")) {
-#ifdef _WIN32
-        ShellExecuteA(nullptr, "open",
-            "https://www.steamgriddb.com/profile/preferences",
-            nullptr, nullptr, SW_SHOWNORMAL);
-#endif
-    }
-
-    ImGui::Spacing();
-    ImGui::TextColored(ACCENT,"Info");
-    ImGui::Separator(); ImGui::Spacing();
-    ImGui::TextDisabled("Data: %s",m_settings.dataDir.c_str());
-
-    ImGui::Spacing(); ImGui::Spacing();
-    ImGui::Spacing(); ImGui::Spacing();
-    ImGui::Spacing(); ImGui::Spacing();
-    if (ImGui::Button("Save",{100,0})) {
-        m_settings.dosboxPath    = dosboxBuf;
-        m_settings.defaultCycles = cyclesBuf;
-        m_settings.sgdbApiKey    = sgdbBuf;
-        m_settings.save(m_configPath);
-        m_dosboxPath = m_settings.dosboxPath;
-        m_artFetcher.setApiKey(m_settings.sgdbApiKey);
-        m_showSettings = false;
-        dosboxBuf[0]='\0'; cyclesBuf[0]='\0'; sgdbBuf[0]='\0';
-    }
-    ImGui::SameLine();
-    if (ImGui::Button("Cancel",{100,0})) {
-        m_showSettings=false;
-        dosboxBuf[0]='\0'; cyclesBuf[0]='\0'; sgdbBuf[0]='\0';
-    }
-    ImGui::SameLine();
-    if (ImGui::Button("About",{80,0})) {
-        m_showSettings=false; m_showAbout=true;
-        dosboxBuf[0]='\0'; cyclesBuf[0]='\0'; sgdbBuf[0]='\0';
-    }
-
-    ImGui::End();
-}
-
-// ── About panel ───────────────────────────────────────────────────────────────
-
-void App::renderAboutPanel()
-{
-    const ImGuiIO& io = ImGui::GetIO();
-    ImGui::SetNextWindowPos({io.DisplaySize.x*0.5f,io.DisplaySize.y*0.5f},
-        ImGuiCond_Always,{0.5f,0.5f});
-    ImGui::SetNextWindowSize({380,230});
-    ImGui::Begin("About AutoDOS2",&m_showAbout,
-        ImGuiWindowFlags_NoResize|ImGuiWindowFlags_NoCollapse);
-
-    ImGui::TextColored(ACCENT,"AutoDOS2");
-    ImGui::SameLine();
-    ImGui::TextDisabled("v%d.%d.%d",
-        AUTODOS2_VERSION_MAJOR,AUTODOS2_VERSION_MINOR,AUTODOS2_VERSION_PATCH);
-    ImGui::Spacing();
-    ImGui::TextWrapped("Cross-platform DOS game frontend.");
-    ImGui::Spacing(); ImGui::Separator(); ImGui::Spacing();
-    ImGui::TextDisabled("Powered by:");
-    ImGui::BulletText("DOSBox Staging");
-    ImGui::BulletText("eXoDOS database (%d entries)", m_gameJson.count());
-    ImGui::BulletText("SDL2 + Dear ImGui");
-    ImGui::BulletText("SQLite + nlohmann/json");
-    ImGui::Spacing(); ImGui::Separator(); ImGui::Spacing();
-    if (ImGui::Button("Close",{100,0})) m_showAbout=false;
-    ImGui::End();
-}
-
-// ── Cleanup ───────────────────────────────────────────────────────────────────
-
-void App::cleanup()
-{
-    if (m_ingestThread.joinable()) m_ingestThread.join();
-    m_covers.clear();
-    m_db.close();
-    if (m_renderer) {
-        ImGui_ImplSDLRenderer2_Shutdown();
-        ImGui_ImplSDL2_Shutdown();
-        ImGui::DestroyContext();
-        SDL_DestroyRenderer(m_renderer);
-        m_renderer=nullptr;
-    }
-    if (m_window) { SDL_DestroyWindow(m_window); m_window=nullptr; }
-    IMG_Quit();
-    SDL_Quit();
+    result.success = true;
+    return result;
 }
 
 } // namespace AutoDOS2
