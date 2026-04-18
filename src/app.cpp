@@ -42,7 +42,7 @@ static void applyAutoDOSTheme()
     s.PopupRounding      = 8.0f;
     s.FramePadding       = {10, 6};
     s.ItemSpacing        = {8, 6};
-    s.ScrollbarSize      = 8.0f;
+    s.ScrollbarSize      = 14.0f;
     s.WindowBorderSize   = 0.0f;
     s.ChildBorderSize    = 0.0f;
 
@@ -510,8 +510,7 @@ void App::renderGrid()
     // "Library" header
     ImGui::SetCursorPosX(CARD_PAD);
     ImGui::TextColored(ACCENT, "Library");
-    ImGui::SameLine();
-    ImGui::TextDisabled("— %d games", (int)m_filtered.size());
+
     ImGui::Spacing();
 
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,{CARD_PAD,0});
