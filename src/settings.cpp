@@ -29,6 +29,8 @@ bool AppSettings::load(const fs::path& configPath)
     }
     if (j.contains("ui") && j["ui"].contains("grid_columns"))
         gridColumns = j["ui"]["grid_columns"];
+    if (j.contains("sgdb_api_key") && j["sgdb_api_key"].is_string())
+        sgdbApiKey = j["sgdb_api_key"];
     return true;
 }
 
@@ -43,6 +45,7 @@ bool AppSettings::save(const fs::path& configPath) const
         {"fullscreen", fullscreen}
     };
     j["ui"] = {{"grid_columns", gridColumns}};
+    j["sgdb_api_key"] = sgdbApiKey;
 
     std::ofstream f(configPath);
     if (!f.is_open()) return false;
