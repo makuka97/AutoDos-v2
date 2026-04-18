@@ -70,6 +70,7 @@ if(WIN32)
         src/gamedb.cpp src/gamedb.h
     src/ingest.cpp src/ingest.h
     src/settings.cpp src/settings.h
+    src/artfetcher.cpp src/artfetcher.h
         src/platform.cpp src/platform.h
     )
 else()
@@ -78,6 +79,7 @@ else()
         src/gamedb.cpp src/gamedb.h
     src/ingest.cpp src/ingest.h
     src/settings.cpp src/settings.h
+    src/artfetcher.cpp src/artfetcher.h
         src/platform.cpp src/platform.h
     )
 endif()
@@ -96,6 +98,7 @@ add_executable(test_db
     src/gamedb.cpp src/gamedb.h
     src/ingest.cpp src/ingest.h
     src/settings.cpp src/settings.h
+    src/artfetcher.cpp src/artfetcher.h
     src/platform.cpp src/platform.h
 )
 target_include_directories(test_db PRIVATE ${CMAKE_SOURCE_DIR}/src)
