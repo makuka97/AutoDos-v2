@@ -21,4 +21,7 @@ std::filesystem::path getExeDir();
 std::filesystem::path openFileDialog(const std::string& filter_desc,
                                      const std::string& filter_pat);
 
+// Opens a native folder picker. Returns empty path on cancel.
+std::filesystem::path openFolderDialog();
+
 } // namespace AutoDOS2
