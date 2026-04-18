@@ -289,6 +289,53 @@ void App::startIngest(const std::string& path)
     });
 }
 
+// ── startIngestFolder ────────────────────────────────────────────────────────
+
+void App::startIngestFolder(const std::string& folderPath)
+{
+    if (m_ingest.busy) return;
+    m_ingest.busy     = true;
+    m_ingest.progress = 10;
+    m_ingest.resultReady = false;
+    { std::lock_guard<std::mutex> lk(m_ingest.mtx); m_ingest.message="Scanning folder..."; m_ingest.lastError=""; }
+
+    if (m_ingestThread.joinable()) m_ingestThread.join();
+
+    m_ingestThread = std::thread([this, folderPath]() {
+        auto setMsg = [this](const std::string& msg) {
+            std::lock_guard<std::mutex> lk(m_ingest.mtx); m_ingest.message = msg;
+        };
+
+        setMsg("Identifying game...");
+        AnalyzeResult res = m_ingestor.ingestFolder(folderPath);
+        m_ingest.progress = 80;
+
+        if (res.success) {
+            setMsg("Adding to library...");
+            GameRecord rec;
+            rec.title      = res.title;
+            rec.slug       = res.slug;
+            rec.platform   = "DOS";
+            rec.exe_path   = res.exe;
+            rec.zip_path   = folderPath;
+            rec.cover_path = (getDataDir() / "art" / (res.slug + ".jpg")).string();
+            if (!m_db.getBySlug(res.slug).has_value())
+                m_db.insert(rec);
+            if (m_artFetcher.hasApiKey()) {
+                fs::path artPath = getDataDir() / "art" / (res.slug + ".jpg");
+                m_artFetcher.fetch(res.title, artPath);
+            }
+        } else {
+            std::lock_guard<std::mutex> lk(m_ingest.mtx);
+            m_ingest.lastError = res.error;
+        }
+
+        { std::lock_guard<std::mutex> lk(m_ingest.mtx); m_ingest.result=res; m_ingest.resultReady=true; }
+        m_ingest.progress = 100;
+        m_ingest.busy     = false;
+    });
+}
+
 // ── Loop ──────────────────────────────────────────────────────────────────────
 
 void App::run()
@@ -476,6 +523,28 @@ void App::renderSidebar()
             ImGui::TextDisabled("Last: %.10s", sel->last_played.c_str());
         ImGui::PopTextWrapPos();
 
+        // CD game hint
+        {
+            fs::path confPath = m_confsRoot / (sel->slug + ".conf");
+            if (fs::exists(confPath)) {
+                std::ifstream cf(confPath);
+                std::string line, confStr;
+                while (std::getline(cf, line)) confStr += line;
+                int discCount = 0;
+                size_t pos = 0;
+                while ((pos = confStr.find(".iso", pos)) != std::string::npos)
+                    { ++discCount; pos += 4; }
+                if (discCount > 1) {
+                    ImGui::Spacing();
+                    ImGui::TextColored({0.314f,0.784f,0.471f,0.9f},
+                        "%d disc game", discCount);
+                    ImGui::PushTextWrapPos(sideW-10);
+                    ImGui::TextDisabled("Press Ctrl+F4 when the game asks to swap discs.");
+                    ImGui::PopTextWrapPos();
+                }
+            }
+        }
+
         ImGui::Spacing();
         ImGui::Separator();
         ImGui::Spacing();
@@ -636,6 +705,11 @@ void App::renderBottomBar(float winW)
     if (ImGui::Button("  Add Zip  ")) {
         auto path = openFileDialog("Archives","*.zip;*.7z;*.rar");
         if (!path.empty()) startIngest(path.string());
+    }
+    ImGui::SameLine(0,4);
+    if (ImGui::Button("  Add Folder  ")) {
+        auto path = openFolderDialog();
+        if (!path.empty()) startIngestFolder(path.string());
     }
     if (busy) ImGui::EndDisabled();
 
