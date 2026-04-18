@@ -137,8 +137,19 @@ bool App::init()
 
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
-    ImGui::GetIO().ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
-    ImGui::GetIO().IniFilename  = nullptr;
+    ImGuiIO& io2 = ImGui::GetIO();
+    io2.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
+    io2.IniFilename  = nullptr;
+
+    // Load default font at larger size for readability
+    ImFontConfig fontCfg;
+    fontCfg.SizePixels    = 15.0f;
+    fontCfg.OversampleH   = 2;
+    fontCfg.OversampleV   = 2;
+    fontCfg.PixelSnapH    = true;
+    io2.Fonts->AddFontDefault(&fontCfg);
+    io2.Fonts->Build();
+
     applyAutoDOSTheme();
     ImGui_ImplSDL2_InitForSDLRenderer(m_window, m_renderer);
     ImGui_ImplSDLRenderer2_Init(m_renderer);
@@ -779,8 +790,6 @@ void App::renderSettingsPanel()
     ImGui::InputText("##cycles",cyclesBuf,sizeof(cyclesBuf));
     ImGui::SameLine(); ImGui::TextDisabled("auto / max / max limit 80000 / 30000");
 
-    ImGui::Spacing();
-    ImGui::Checkbox("Launch games in fullscreen",&m_settings.fullscreen);
 
     ImGui::Spacing();
     ImGui::TextColored(ACCENT,"Info");
@@ -798,13 +807,14 @@ void App::renderSettingsPanel()
     }
     ImGui::SameLine();
     if (ImGui::Button("Cancel",{100,0})) {
-        m_showSettings=false; dosboxBuf[0]='\0'; cyclesBuf[0]='\0';
+        m_showSettings=false; dosboxBuf[0]='        m_showSettings=false; dosboxBuf[0]='\0'; cyclesBuf[0]='\0';'; cyclesBuf[0]='        m_showSettings=false; dosboxBuf[0]='\0'; cyclesBuf[0]='\0';';
     }
     ImGui::SameLine();
-    if (ImGui::Button("About AutoDOS2",{140,0})) {
+    if (ImGui::Button("About",{80,0})) {
         m_showSettings=false; m_showAbout=true;
-        dosboxBuf[0]='\0'; cyclesBuf[0]='\0';
+        dosboxBuf[0]='        m_showSettings=false; dosboxBuf[0]='\0'; cyclesBuf[0]='\0';'; cyclesBuf[0]='        m_showSettings=false; dosboxBuf[0]='\0'; cyclesBuf[0]='\0';';
     }
+
     ImGui::End();
 }
 
