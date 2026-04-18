@@ -1,5 +1,6 @@
 #include "app.h"
 #include "platform.h"
+#include "settings.h"
 
 #include <SDL.h>
 #include <SDL_image.h>
@@ -18,7 +19,7 @@
 
 #ifndef AUTODOS2_VERSION_MAJOR
 #  define AUTODOS2_VERSION_MAJOR 0
-#  define AUTODOS2_VERSION_MINOR 1
+#  define AUTODOS2_VERSION_MINOR 9
 #  define AUTODOS2_VERSION_PATCH 0
 #endif
 
@@ -33,32 +34,44 @@ static constexpr ImU32  ACCENT32DIM = IM_COL32(60, 140, 90, 160);
 static void applyAutoDOSTheme()
 {
     ImGuiStyle& s = ImGui::GetStyle();
-    s.WindowRounding     = 0.0f;  s.ChildRounding  = 6.0f;
-    s.FrameRounding      = 5.0f;  s.ScrollbarRounding = 4.0f;
-    s.GrabRounding       = 4.0f;  s.PopupRounding  = 6.0f;
-    s.FramePadding       = {10,6}; s.ItemSpacing    = {8,6};
-    s.ScrollbarSize      = 10.0f; s.WindowBorderSize = 0.0f;
+    s.WindowRounding     = 0.0f;
+    s.ChildRounding      = 8.0f;
+    s.FrameRounding      = 6.0f;
+    s.ScrollbarRounding  = 4.0f;
+    s.GrabRounding       = 4.0f;
+    s.PopupRounding      = 8.0f;
+    s.FramePadding       = {10, 6};
+    s.ItemSpacing        = {8, 6};
+    s.ScrollbarSize      = 8.0f;
+    s.WindowBorderSize   = 0.0f;
+    s.ChildBorderSize    = 0.0f;
 
     ImVec4* c = s.Colors;
-    c[ImGuiCol_WindowBg]             = {0.071f,0.071f,0.094f,1.00f};
-    c[ImGuiCol_ChildBg]              = {0.090f,0.090f,0.118f,1.00f};
-    c[ImGuiCol_PopupBg]              = {0.110f,0.110f,0.141f,0.97f};
-    c[ImGuiCol_Border]               = {0.149f,0.149f,0.196f,1.00f};
-    c[ImGuiCol_FrameBg]              = {0.130f,0.130f,0.165f,1.00f};
-    c[ImGuiCol_FrameBgHovered]       = {0.157f,0.220f,0.180f,1.00f};
-    c[ImGuiCol_FrameBgActive]        = {0.196f,0.282f,0.220f,1.00f};
-    c[ImGuiCol_TitleBg]              = {0.055f,0.055f,0.075f,1.00f};
-    c[ImGuiCol_TitleBgActive]        = {0.055f,0.055f,0.075f,1.00f};
-    c[ImGuiCol_ScrollbarBg]          = {0.055f,0.055f,0.075f,1.00f};
-    c[ImGuiCol_ScrollbarGrab]        = {0.220f,0.220f,0.280f,1.00f};
-    c[ImGuiCol_ScrollbarGrabHovered] = {0.314f,0.784f,0.471f,0.6f};
+    c[ImGuiCol_WindowBg]             = {0.086f, 0.086f, 0.110f, 1.00f};
+    c[ImGuiCol_ChildBg]              = {0.100f, 0.100f, 0.129f, 1.00f};
+    c[ImGuiCol_PopupBg]              = {0.110f, 0.110f, 0.141f, 0.97f};
+    c[ImGuiCol_Border]               = {0.180f, 0.180f, 0.220f, 1.00f};
+    c[ImGuiCol_FrameBg]              = {0.130f, 0.130f, 0.165f, 1.00f};
+    c[ImGuiCol_FrameBgHovered]       = {0.157f, 0.220f, 0.180f, 1.00f};
+    c[ImGuiCol_FrameBgActive]        = {0.196f, 0.282f, 0.220f, 1.00f};
+    c[ImGuiCol_TitleBg]              = {0.060f, 0.060f, 0.080f, 1.00f};
+    c[ImGuiCol_TitleBgActive]        = {0.060f, 0.060f, 0.080f, 1.00f};
+    c[ImGuiCol_ScrollbarBg]          = {0.060f, 0.060f, 0.080f, 1.00f};
+    c[ImGuiCol_ScrollbarGrab]        = {0.200f, 0.200f, 0.260f, 1.00f};
+    c[ImGuiCol_ScrollbarGrabHovered] = {0.314f, 0.784f, 0.471f, 0.5f};
     c[ImGuiCol_CheckMark]            = ACCENT;
-    c[ImGuiCol_Button]               = {0.125f,0.204f,0.157f,1.00f};
-    c[ImGuiCol_ButtonHovered]        = {0.200f,0.322f,0.247f,1.00f};
+    c[ImGuiCol_Button]               = {0.125f, 0.204f, 0.157f, 1.00f};
+    c[ImGuiCol_ButtonHovered]        = {0.200f, 0.322f, 0.247f, 1.00f};
     c[ImGuiCol_ButtonActive]         = ACCENT;
-    c[ImGuiCol_Text]                 = {0.863f,0.863f,0.863f,1.00f};
-    c[ImGuiCol_TextDisabled]         = {0.431f,0.431f,0.471f,1.00f};
-    c[ImGuiCol_Separator]            = {0.149f,0.149f,0.196f,1.00f};
+    c[ImGuiCol_Header]               = {0.125f, 0.204f, 0.157f, 0.6f};
+    c[ImGuiCol_HeaderHovered]        = {0.200f, 0.322f, 0.247f, 1.00f};
+    c[ImGuiCol_HeaderActive]         = ACCENT;
+    c[ImGuiCol_Text]                 = {0.880f, 0.880f, 0.880f, 1.00f};
+    c[ImGuiCol_TextDisabled]         = {0.420f, 0.420f, 0.460f, 1.00f};
+    c[ImGuiCol_Separator]            = {0.180f, 0.180f, 0.220f, 1.00f};
+    c[ImGuiCol_Tab]                  = {0.100f, 0.100f, 0.129f, 1.00f};
+    c[ImGuiCol_TabHovered]           = {0.200f, 0.322f, 0.247f, 1.00f};
+    c[ImGuiCol_TabActive]            = {0.125f, 0.204f, 0.157f, 1.00f};
 }
 
 // ── CoverCache ────────────────────────────────────────────────────────────────
@@ -67,12 +80,12 @@ CoverCache::~CoverCache() { clear(); }
 
 SDL_Texture* CoverCache::makePlaceholder()
 {
-    constexpr int W = 180, H = 187;
+    constexpr int W = 180, H = 200;
     SDL_Surface* s = SDL_CreateRGBSurfaceWithFormat(0,W,H,32,SDL_PIXELFORMAT_RGBA32);
     if (!s) return nullptr;
-    SDL_FillRect(s, nullptr, SDL_MapRGB(s->format, 22,28,38));
-    SDL_Rect r = {W/4,H/4,W/2,H/2};
-    SDL_FillRect(s, &r, SDL_MapRGB(s->format, 30,40,54));
+    SDL_FillRect(s, nullptr, SDL_MapRGB(s->format, 26, 28, 36));
+    SDL_Rect r = {W/4, H/4, W/2, H/2};
+    SDL_FillRect(s, &r, SDL_MapRGB(s->format, 34, 38, 52));
     SDL_Texture* t = SDL_CreateTextureFromSurface(m_renderer, s);
     SDL_FreeSurface(s);
     return t;
@@ -99,7 +112,7 @@ void CoverCache::clear()
     if (m_placeholder) { SDL_DestroyTexture(m_placeholder); m_placeholder=nullptr; }
 }
 
-// ── App::init ─────────────────────────────────────────────────────────────────
+// ── App ───────────────────────────────────────────────────────────────────────
 
 App::App()  = default;
 App::~App() { cleanup(); }
@@ -132,50 +145,39 @@ bool App::init()
 
     m_covers.setRenderer(m_renderer);
 
-    // ── Paths ─────────────────────────────────────────────────────────────────
-    fs::path dataDir   = getDataDir();          // AppData/AutoDOS2/autodos2/
-    fs::path exeDir    = getExeDir();           // directory containing AutoDOS2.exe
+    fs::path dataDir   = getDataDir();
+    fs::path exeDir    = getExeDir();
     fs::path extractRoot = dataDir / "games";
     fs::path confsRoot   = dataDir / "games";
     fs::path artRoot     = dataDir / "art";
-    fs::path gamesJson   = dataDir / "games.json";
     fs::path sevenZip    = exeDir  / "7za.exe";
     fs::path dosbox      = exeDir  / "dosbox" / "dosbox.exe";
 
     fs::create_directories(extractRoot);
     fs::create_directories(artRoot);
 
-    // Copy games.json from exe dir if not yet in AppData
-    if (!fs::exists(gamesJson)) {
-        fs::path srcJson = exeDir / "games.json";
-        if (fs::exists(srcJson)) {
-            std::error_code ec;
-            fs::copy_file(srcJson, gamesJson, ec);
-        }
-    }
+    // Load settings
+    m_configPath = exeDir / "app_config.json";
+    m_settings.load(m_configPath);
+    m_settings.applyDefaults(exeDir, dataDir);
 
     // Load games.json
-    if (!m_gameJson.load(gamesJson)) {
-        std::fprintf(stderr, "[AutoDOS2] Warning: games.json not found at %s\n",
-            gamesJson.string().c_str());
-        std::fprintf(stderr, "[AutoDOS2] Place games.json next to AutoDOS2.exe\n");
-        // Non-fatal: unknown games still work via scorer
-    } else {
-        std::fprintf(stdout, "[AutoDOS2] Loaded %d games from games.json\n",
-            m_gameJson.count());
-    }
+    fs::path jsonSrc = exeDir / "games.json";
+    if (!fs::exists(jsonSrc)) jsonSrc = dataDir / "games.json";
+    if (m_gameJson.load(jsonSrc))
+        std::fprintf(stdout,"[AutoDOS2] Loaded %d games\n", m_gameJson.count());
 
-    // Configure ingestor
     m_ingestor.setSevenZipPath(sevenZip);
     m_ingestor.setExtractRoot(extractRoot);
     m_ingestor.setConfsRoot(confsRoot);
     m_ingestor.setDosboxPath(dosbox);
-    m_dosboxPath = dosbox;
-    m_confsRoot  = confsRoot;
     m_ingestor.setDatabase(&m_gameJson);
     m_ingestor.setDos4gwPath(exeDir / "DOS4GW.EXE");
 
-    // Open SQLite DB
+    // Use settings dosbox path if configured
+    m_dosboxPath = m_settings.dosboxPath.empty() ? dosbox : fs::path(m_settings.dosboxPath);
+    m_confsRoot  = confsRoot;
+
     fs::path dbPath = dataDir / "autodos2.db";
     if (!m_db.open(dbPath)) return false;
 
@@ -206,20 +208,13 @@ void App::applySearch()
     if (!ok) m_selected=-1;
 }
 
-// ── startIngest ───────────────────────────────────────────────────────────────
-
 void App::startIngest(const std::string& path)
 {
-    if (m_ingest.busy) return; // already working
-
+    if (m_ingest.busy) return;
     m_ingest.busy     = true;
     m_ingest.progress = 0;
     m_ingest.resultReady = false;
-    {
-        std::lock_guard<std::mutex> lk(m_ingest.mtx);
-        m_ingest.message   = "Analysing...";
-        m_ingest.lastError = "";
-    }
+    { std::lock_guard<std::mutex> lk(m_ingest.mtx); m_ingest.message="Analysing..."; m_ingest.lastError=""; }
 
     if (m_ingestThread.joinable()) m_ingestThread.join();
 
@@ -231,7 +226,7 @@ void App::startIngest(const std::string& path)
 
         setMsg("Analysing archive...");
         AnalyzeResult res = m_ingestor.ingest(path,
-            [this, &setMsg](int pct) {
+            [this,&setMsg](int pct) {
                 m_ingest.progress = pct;
                 if (pct < 80) setMsg("Extracting...");
                 else          setMsg("Finalising...");
@@ -239,32 +234,21 @@ void App::startIngest(const std::string& path)
 
         if (res.success) {
             setMsg("Adding to library...");
-            // Write to SQLite
             GameRecord rec;
             rec.title      = res.title;
             rec.slug       = res.slug;
             rec.platform   = "DOS";
             rec.exe_path   = res.exe;
-
-            // conf path = confsRoot / slug.conf
-            fs::path dataDir  = getDataDir();
             rec.zip_path   = path;
-            rec.cover_path = (dataDir / "art" / (res.slug + ".jpg")).string();
-
-            // Check for duplicate slug
-            if (!m_db.getBySlug(res.slug).has_value()) {
+            rec.cover_path = (getDataDir() / "art" / (res.slug + ".jpg")).string();
+            if (!m_db.getBySlug(res.slug).has_value())
                 m_db.insert(rec);
-            }
         } else {
             std::lock_guard<std::mutex> lk(m_ingest.mtx);
             m_ingest.lastError = res.error;
         }
 
-        {
-            std::lock_guard<std::mutex> lk(m_ingest.mtx);
-            m_ingest.result      = res;
-            m_ingest.resultReady = true;
-        }
+        { std::lock_guard<std::mutex> lk(m_ingest.mtx); m_ingest.result=res; m_ingest.resultReady=true; }
         m_ingest.progress = 100;
         m_ingest.busy     = false;
     });
@@ -283,13 +267,10 @@ void App::processEvents()
     while (SDL_PollEvent(&e)) {
         ImGui_ImplSDL2_ProcessEvent(&e);
         if (e.type==SDL_QUIT) m_running=false;
-        if (e.type==SDL_WINDOWEVENT && e.window.event==SDL_WINDOWEVENT_CLOSE)
-            m_running=false;
-        if (e.type==SDL_KEYDOWN && e.key.keysym.sym==SDLK_F1)
-            m_showDemoWindow=!m_showDemoWindow;
+        if (e.type==SDL_WINDOWEVENT && e.window.event==SDL_WINDOWEVENT_CLOSE) m_running=false;
+        if (e.type==SDL_KEYDOWN && e.key.keysym.sym==SDLK_F1) m_showDemoWindow=!m_showDemoWindow;
         if (e.type==SDL_DROPFILE) {
-            std::string dropped = e.drop.file;
-            SDL_free(e.drop.file);
+            std::string dropped=e.drop.file; SDL_free(e.drop.file);
             if (!m_ingest.busy) startIngest(dropped);
         }
     }
@@ -297,21 +278,16 @@ void App::processEvents()
 
 void App::update()
 {
-    // Check if ingest just finished and refresh library
     if (m_ingest.resultReady) {
-        bool ready = false;
-        {
-            std::lock_guard<std::mutex> lk(m_ingest.mtx);
-            ready = m_ingest.resultReady;
-            m_ingest.resultReady = false;
-        }
+        bool ready=false;
+        { std::lock_guard<std::mutex> lk(m_ingest.mtx); ready=m_ingest.resultReady; m_ingest.resultReady=false; }
         if (ready) refreshLibrary();
     }
 }
 
 void App::render()
 {
-    SDL_SetRenderDrawColor(m_renderer,18,18,24,255);
+    SDL_SetRenderDrawColor(m_renderer,22,22,28,255);
     SDL_RenderClear(m_renderer);
     ImGui_ImplSDLRenderer2_NewFrame();
     ImGui_ImplSDL2_NewFrame();
@@ -324,6 +300,14 @@ void App::render()
 }
 
 // ── Layout ────────────────────────────────────────────────────────────────────
+//
+//  ┌─────────────────────────────────────────────────────┐
+//  │  Top bar: AutoDOS2  v0.9  |  N games  |  DB: N  [⚙] [Search...]  │
+//  ├──────────┬──────────────────────────────────────────┤
+//  │ Sidebar  │  Library header + 5-col card grid        │
+//  ├──────────┴──────────────────────────────────────────┤
+//  │  Launch | Add Zip | Delete       status      N fps  │
+//  └─────────────────────────────────────────────────────┘
 
 void App::renderImGui()
 {
@@ -336,8 +320,8 @@ void App::renderImGui()
         ImGuiWindowFlags_NoSavedSettings|ImGuiWindowFlags_NoBringToFrontOnFocus);
     ImGui::PopStyleVar();
 
-    const float topH    = 56.0f;
-    const float bottomH = 50.0f;
+    const float topH    = 52.0f;
+    const float bottomH = 48.0f;
     const float midH    = io.DisplaySize.y - topH - bottomH;
 
     renderTopBar(io.DisplaySize.x);
@@ -353,60 +337,103 @@ void App::renderImGui()
     renderBottomBar(io.DisplaySize.x);
     ImGui::End();
 
-    // Ingest progress overlay
-    if (m_ingest.busy || m_ingest.progress > 0) renderIngestOverlay();
-
-    // Launch error overlay
     if (m_launchState == LaunchState::Error) renderLaunchError();
-
-
+    if (m_ingest.busy || m_ingest.progress > 0) renderIngestOverlay();
+    if (m_showSettings) renderSettingsPanel();
+    if (m_showAbout)    renderAboutPanel();
 }
 
 // ── Top bar ───────────────────────────────────────────────────────────────────
 
 void App::renderTopBar(float winW)
 {
-    ImGui::PushStyleColor(ImGuiCol_ChildBg,ImVec4{0.055f,0.055f,0.075f,1.0f});
-    ImGui::BeginChild("##top",{0,56},false,ImGuiWindowFlags_NoScrollbar);
+    ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4{0.060f,0.060f,0.080f,1.0f});
+    ImGui::BeginChild("##top",{0,52},false,ImGuiWindowFlags_NoScrollbar);
     ImGui::PopStyleColor();
 
-    ImGui::SetCursorPos({14,16});
+    // Left: title + stats
+    ImGui::SetCursorPos({16,14});
     ImGui::TextColored(ACCENT,"AutoDOS2");
-    ImGui::SameLine(); ImGui::SetCursorPosY(16);
+    ImGui::SameLine();
+    ImGui::SetCursorPosY(14);
     ImGui::TextDisabled("v%d.%d  |  %d games  |  DB: %d entries",
-        AUTODOS2_VERSION_MAJOR,AUTODOS2_VERSION_MINOR,
+        AUTODOS2_VERSION_MAJOR, AUTODOS2_VERSION_MINOR,
         (int)m_allGames.size(), m_gameJson.count());
 
-    const float searchW=260.0f;
-    ImGui::SetCursorPos({winW-searchW-14,14});
+    // Right: gear + search
+    const float searchW = 240.0f;
+    const float gearW   = 28.0f;
+    const float rightX  = winW - searchW - gearW - 28.0f;
+
+    // Gear button — simple cog drawn with DrawList
+    ImGui::SetCursorPos({rightX, 12});
+    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4{0,0,0,0});
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4{0.2f,0.2f,0.25f,1.0f});
+    ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4{0.3f,0.3f,0.38f,1.0f});
+    bool gearClicked = ImGui::Button("##gear", {gearW, 28});
+    ImGui::PopStyleColor(3);
+
+    // Draw gear icon on the button
+    {
+        ImVec2 c = {rightX + gearW*0.5f, 12 + 14.0f};
+        // Get window pos to convert to screen coords
+        ImVec2 wpos = ImGui::GetWindowPos();
+        c.x += wpos.x;
+        c.y += wpos.y;
+        ImDrawList* dl = ImGui::GetWindowDrawList();
+        const float R = 7.0f, r = 4.5f, tr = 2.5f;
+        const int teeth = 8;
+        ImU32 col = m_showSettings ? ACCENT32 : IM_COL32(180,180,190,255);
+
+        // Draw teeth
+        for (int i = 0; i < teeth; i++) {
+            float a0 = (float)i / teeth * 6.2832f - 0.3f;
+            float a1 = (float)i / teeth * 6.2832f + 0.3f;
+            dl->AddLine({c.x+cosf(a0)*r, c.y+sinf(a0)*r},
+                        {c.x+cosf(a0)*R, c.y+sinf(a0)*R}, col, 2.0f);
+            dl->AddLine({c.x+cosf(a1)*r, c.y+sinf(a1)*r},
+                        {c.x+cosf(a1)*R, c.y+sinf(a1)*R}, col, 2.0f);
+        }
+        // Inner circle
+        dl->AddCircle(c, r, col, 16, 1.5f);
+    }
+
+    if (gearClicked) m_showSettings = !m_showSettings;
+
+    // Search bar
+    ImGui::SetCursorPos({rightX + gearW + 8.0f, 12});
     ImGui::SetNextItemWidth(searchW);
-    ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding,20.0f);
+    ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 20.0f);
     if (ImGui::InputTextWithHint("##search","Search Games...",
             m_searchBuf,sizeof(m_searchBuf)))
         applySearch();
     ImGui::PopStyleVar();
+
     ImGui::EndChild();
 
-    ImDrawList* dl=ImGui::GetWindowDrawList();
-    ImVec2 p=ImGui::GetCursorScreenPos();
-    dl->AddLine(p,{p.x+winW,p.y},IM_COL32(38,38,60,255),1.0f);
+    // Bottom divider
+    ImDrawList* dl = ImGui::GetWindowDrawList();
+    ImVec2 p = ImGui::GetCursorScreenPos();
+    dl->AddLine(p,{p.x+winW,p.y},IM_COL32(45,45,58,255),1.0f);
 }
 
 // ── Sidebar ───────────────────────────────────────────────────────────────────
 
 void App::renderSidebar()
 {
-    const float sideW=200.0f;
-    ImGui::PushStyleColor(ImGuiCol_ChildBg,ImVec4{0.055f,0.060f,0.080f,1.0f});
+    const float sideW = 200.0f;
+    ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4{0.072f,0.072f,0.094f,1.0f});
     ImGui::BeginChild("##sidebar",{sideW,0},false,ImGuiWindowFlags_NoScrollbar);
     ImGui::PopStyleColor();
 
-    const GameRecord* sel=nullptr;
+    const GameRecord* sel = nullptr;
     for (auto& g:m_filtered) if (g.id==m_selected){sel=&g;break;}
 
+    ImGui::SetCursorPos({12, 16});
+
     if (sel) {
-        ImGui::SetCursorPos({10, 12});
-        ImGui::PushTextWrapPos(sideW - 10);
+        // Selected game info
+        ImGui::PushTextWrapPos(sideW - 12);
         ImGui::TextColored(ACCENT, "%s", sel->title.c_str());
         ImGui::Spacing();
         ImGui::TextDisabled("Played: %d times", sel->play_count);
@@ -414,39 +441,50 @@ void App::renderSidebar()
             ImGui::TextDisabled("Last: %.10s", sel->last_played.c_str());
         ImGui::PopTextWrapPos();
 
-        // Hotkey reference
         ImGui::Spacing();
         ImGui::Separator();
         ImGui::Spacing();
+
+        // Hotkey reference
         ImGui::TextColored(ACCENT, "Hotkeys");
         ImGui::Spacing();
 
         auto hk = [&](const char* key, const char* desc) {
-            ImGui::TextColored({0.314f,0.784f,0.471f,0.9f}, "%s", key);
-            ImGui::SameLine(90);
+            ImGui::SetCursorPosX(12);
+            ImGui::TextColored({0.314f,0.784f,0.471f,0.85f}, "%s", key);
+            ImGui::SameLine(95);
             ImGui::TextDisabled("%s", desc);
         };
-        hk("Alt+Enter","Fullscreen");
-        hk("Ctrl+F10", "Mouse lock");
-        hk("Ctrl+F11", "Speed down");
-        hk("Ctrl+F12", "Speed up");
-        hk("Ctrl+F4",  "Swap disc");
-        hk("Ctrl+F7",  "Screenshot");
-        hk("Ctrl+F9",  "Quit game");
+        hk("Alt+Enter", "Fullscreen");
+        hk("Ctrl+F10",  "Mouse lock");
+        hk("Ctrl+F11",  "Speed -");
+        hk("Ctrl+F12",  "Speed +");
+        hk("Ctrl+F4",   "Swap disc");
+        hk("Ctrl+F7",   "Screenshot");
+        hk("Ctrl+F9",   "Quit game");
     } else {
-        ImGui::SetCursorPos({10,16});
-        ImGui::TextColored(ACCENT,"Library");
-        ImGui::SetCursorPosX(10);
-        ImGui::TextDisabled("%d games",(int)m_allGames.size());
+        // Library overview
+        ImGui::TextColored(ACCENT, "Library");
+        ImGui::SetCursorPosX(12);
+        ImGui::TextDisabled("%d games", (int)m_allGames.size());
         ImGui::Spacing();
-        ImGui::SetCursorPosX(10);
+        ImGui::SetCursorPosX(12);
+        ImGui::Separator();
+        ImGui::Spacing();
+        ImGui::SetCursorPosX(12);
+        ImGui::TextColored({0.314f,0.784f,0.471f,0.7f}, "Library");
+        ImGui::Spacing();
+        ImGui::SetCursorPosX(12);
         ImGui::TextDisabled("Drag a DOS zip\nonto the window\nto add a game.");
     }
 
-    ImDrawList* dl=ImGui::GetWindowDrawList();
-    ImVec2 tl=ImGui::GetWindowPos();
-    float h=ImGui::GetWindowHeight();
-    dl->AddLine({tl.x+sideW-1,tl.y},{tl.x+sideW-1,tl.y+h},IM_COL32(38,38,60,255),1.0f);
+    // Right border line
+    ImDrawList* dl = ImGui::GetWindowDrawList();
+    ImVec2 tl = ImGui::GetWindowPos();
+    float  h  = ImGui::GetWindowHeight();
+    dl->AddLine({tl.x+sideW-1,tl.y},{tl.x+sideW-1,tl.y+h},
+        IM_COL32(45,45,58,255),1.0f);
+
     ImGui::EndChild();
 }
 
@@ -455,62 +493,79 @@ void App::renderSidebar()
 void App::renderGrid()
 {
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,{CARD_PAD,CARD_PAD});
-    ImGui::BeginChild("##grid",{0,0},false);
+    ImGui::BeginChild("##gridouter",{0,0},false);
     ImGui::PopStyleVar();
 
-    const float availW=ImGui::GetContentRegionAvail().x;
-    const int   cols=std::max(1,(int)((availW+CARD_PAD)/(CARD_W+CARD_PAD)));
-    const float imgH=CARD_H*0.76f;
-    const float lblH=CARD_H-imgH;
-    ImDrawList* dl=ImGui::GetWindowDrawList();
+    // "Library" header
+    ImGui::SetCursorPosX(CARD_PAD);
+    ImGui::TextColored(ACCENT, "Library");
+    ImGui::SameLine();
+    ImGui::TextDisabled("— %d games", (int)m_filtered.size());
+    ImGui::Spacing();
+
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,{CARD_PAD,0});
+    ImGui::BeginChild("##gridinner",{0,0},false);
+    ImGui::PopStyleVar();
+
+    const float availW = ImGui::GetContentRegionAvail().x;
+    const int   cols   = std::max(1,(int)((availW+CARD_PAD)/(CARD_W+CARD_PAD)));
+    const float imgH   = CARD_H * 0.76f;
+    const float lblH   = CARD_H - imgH;
+    ImDrawList* dl     = ImGui::GetWindowDrawList();
 
     for (int i=0;i<(int)m_filtered.size();++i) {
-        const GameRecord& g=m_filtered[i];
-        const bool sel=(g.id==m_selected);
+        const GameRecord& g = m_filtered[i];
+        const bool sel = (g.id==m_selected);
         if (i%cols!=0) ImGui::SameLine(0,CARD_PAD);
         ImGui::PushID(g.id);
 
-        ImVec2 pos=ImGui::GetCursorScreenPos();
+        ImVec2 pos = ImGui::GetCursorScreenPos();
         ImGui::InvisibleButton("##card",{CARD_W,CARD_H});
-        bool hov=ImGui::IsItemHovered();
-        if (ImGui::IsItemClicked()) m_selected=sel?-1:g.id;
-        if (ImGui::IsItemClicked() && ImGui::IsMouseDoubleClicked(0) && !sel)
-            launchGame(g);
-        else if (ImGui::IsMouseDoubleClicked(0) && g.id==m_selected)
-            launchGame(g);
+        bool hov = ImGui::IsItemHovered();
+        if (ImGui::IsItemClicked()) m_selected = sel?-1:g.id;
+        if (ImGui::IsMouseDoubleClicked(0) && hov) launchGame(g);
 
-        ImU32 bg=sel?IM_COL32(32,58,42,255):hov?IM_COL32(28,38,38,255):IM_COL32(18,22,30,255);
-        dl->AddRectFilled(pos,{pos.x+CARD_W,pos.y+CARD_H},bg,8.0f);
+        ImU32 bg = sel
+            ? IM_COL32(36,60,46,255)
+            : hov ? IM_COL32(32,38,42,255)
+                  : IM_COL32(22,24,32,255);
+        dl->AddRectFilled(pos,{pos.x+CARD_W,pos.y+CARD_H},bg,10.0f);
 
-        SDL_Texture* tex=m_covers.get(g.cover_path);
-        if (tex) dl->AddImage(reinterpret_cast<ImTextureID>(tex),pos,{pos.x+CARD_W,pos.y+imgH});
+        SDL_Texture* tex = m_covers.get(g.cover_path);
+        if (tex) dl->AddImage(reinterpret_cast<ImTextureID>(tex),
+            pos,{pos.x+CARD_W,pos.y+imgH},
+            {0,0},{1,1},IM_COL32(255,255,255,240));
 
-        ImVec2 gTL={pos.x,pos.y+imgH-24.0f};
-        ImVec2 gBR={pos.x+CARD_W,pos.y+CARD_H};
-        dl->AddRectFilledMultiColor(gTL,gBR,
+        // Gradient
+        dl->AddRectFilledMultiColor(
+            {pos.x,pos.y+imgH-28.0f},{pos.x+CARD_W,pos.y+CARD_H},
             IM_COL32(0,0,0,0),IM_COL32(0,0,0,0),
-            IM_COL32(0,0,0,220),IM_COL32(0,0,0,220));
+            IM_COL32(0,0,0,230),IM_COL32(0,0,0,230));
 
-        ImVec2 tp={pos.x+8.0f,pos.y+imgH+(lblH-14.0f)*0.35f};
-        dl->AddText(nullptr,0,tp,IM_COL32(225,225,225,255),
+        // Title
+        ImVec2 tp = {pos.x+8.0f, pos.y+imgH+(lblH-14.0f)*0.3f};
+        dl->AddText(nullptr,0,tp,IM_COL32(230,230,230,255),
             g.title.c_str(),nullptr,CARD_W-10.0f);
 
-        if (sel) dl->AddRect(pos,{pos.x+CARD_W,pos.y+CARD_H},ACCENT32,8.0f,0,2.5f);
-        else if (hov) dl->AddRect(pos,{pos.x+CARD_W,pos.y+CARD_H},ACCENT32DIM,8.0f,0,1.5f);
+        if (sel)
+            dl->AddRect(pos,{pos.x+CARD_W,pos.y+CARD_H},ACCENT32,10.0f,0,2.5f);
+        else if (hov)
+            dl->AddRect(pos,{pos.x+CARD_W,pos.y+CARD_H},ACCENT32DIM,10.0f,0,1.5f);
 
         ImGui::PopID();
     }
 
     if (m_filtered.empty()) {
         ImGui::SetCursorPosY(80);
-        const char* msg=m_allGames.empty()
-            ?"No games yet — drag a DOS zip onto the window"
-            :"No games match your search";
-        float tw=ImGui::CalcTextSize(msg).x;
+        const char* msg = m_allGames.empty()
+            ? "No games yet — drag a DOS zip onto the window"
+            : "No games match your search";
+        float tw = ImGui::CalcTextSize(msg).x;
         ImGui::SetCursorPosX((ImGui::GetContentRegionAvail().x-tw)*0.5f);
         ImGui::TextDisabled("%s",msg);
     }
 
+    ImGui::EndChild();
     ImGui::EndChild();
 }
 
@@ -518,34 +573,31 @@ void App::renderGrid()
 
 void App::renderBottomBar(float winW)
 {
-    ImGui::PushStyleColor(ImGuiCol_ChildBg,ImVec4{0.055f,0.055f,0.075f,1.0f});
+    ImGui::PushStyleColor(ImGuiCol_ChildBg,ImVec4{0.060f,0.060f,0.080f,1.0f});
     ImGui::BeginChild("##bot",{0,0},false,ImGuiWindowFlags_NoScrollbar);
     ImGui::PopStyleColor();
 
-    ImDrawList* dl=ImGui::GetWindowDrawList();
-    ImVec2 p=ImGui::GetWindowPos();
-    dl->AddLine(p,{p.x+winW,p.y},IM_COL32(38,38,60,255),1.0f);
-    ImGui::SetCursorPos({10,10});
+    ImDrawList* dl = ImGui::GetWindowDrawList();
+    ImVec2 p = ImGui::GetWindowPos();
+    dl->AddLine(p,{p.x+winW,p.y},IM_COL32(45,45,58,255),1.0f);
+
+    ImGui::SetCursorPos({12,10});
 
     const GameRecord* sel=nullptr;
     for (auto& g:m_filtered) if (g.id==m_selected){sel=&g;break;}
     const bool hasSel=(sel!=nullptr);
     const bool busy=m_ingest.busy.load();
 
-    // Launch
-    ImGui::PushStyleColor(ImGuiCol_Button,       IM_COL32(30,70,45,255));
-    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, IM_COL32(50,110,70,255));
+    // Launch — green
+    ImGui::PushStyleColor(ImGuiCol_Button,       IM_COL32(28,68,42,255));
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, IM_COL32(48,108,68,255));
     ImGui::PushStyleColor(ImGuiCol_ButtonActive,  IM_COL32(80,200,120,255));
     if (!hasSel) ImGui::BeginDisabled();
-    if (ImGui::Button("  Launch  ")) {
-        if (sel) launchGame(*sel);
-    }
+    if (ImGui::Button("  Launch  ")) { if(sel) launchGame(*sel); }
     if (!hasSel) ImGui::EndDisabled();
     ImGui::PopStyleColor(3);
 
     ImGui::SameLine(0,8);
-
-    // Add Zip
     if (busy) ImGui::BeginDisabled();
     if (ImGui::Button("  Add Zip  ")) {
         auto path = openFileDialog("Archives","*.zip;*.7z;*.rar");
@@ -554,10 +606,8 @@ void App::renderBottomBar(float winW)
     if (busy) ImGui::EndDisabled();
 
     ImGui::SameLine(0,8);
-
-    // Delete
-    ImGui::PushStyleColor(ImGuiCol_Button,       IM_COL32(70,30,30,255));
-    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, IM_COL32(110,50,50,255));
+    ImGui::PushStyleColor(ImGuiCol_Button,       IM_COL32(68,28,28,255));
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, IM_COL32(108,48,48,255));
     ImGui::PushStyleColor(ImGuiCol_ButtonActive,  IM_COL32(200,80,80,255));
     if (!hasSel) ImGui::BeginDisabled();
     if (ImGui::Button("  Delete  ")) {
@@ -567,11 +617,17 @@ void App::renderBottomBar(float winW)
     ImGui::PopStyleColor(3);
 
     ImGui::SameLine();
-    if (sel) ImGui::TextDisabled("  %s",sel->title.c_str());
-    else ImGui::TextDisabled("  Drag a DOS zip to add  |  Double-click to launch");
+    if (sel)
+        ImGui::TextDisabled("  %s", sel->title.c_str());
+    else
+        ImGui::TextDisabled("  Drag a DOS zip to add  |  Double-click to launch");
 
-    ImGui::SameLine(winW-70);
-    ImGui::TextDisabled("%.0f fps",ImGui::GetIO().Framerate);
+    // FPS right-aligned
+    char fpsBuf[32];
+    snprintf(fpsBuf, sizeof(fpsBuf), "%.0f FPS", ImGui::GetIO().Framerate);
+    float fpsW = ImGui::CalcTextSize(fpsBuf).x;
+    ImGui::SameLine(winW - fpsW - 16);
+    ImGui::TextDisabled("%s", fpsBuf);
 
     ImGui::EndChild();
 }
@@ -581,21 +637,17 @@ void App::renderBottomBar(float winW)
 void App::renderIngestOverlay()
 {
     const ImGuiIO& io = ImGui::GetIO();
-    ImGui::SetNextWindowPos({io.DisplaySize.x*0.5f, io.DisplaySize.y*0.5f},
-        ImGuiCond_Always, {0.5f,0.5f});
-    ImGui::SetNextWindowSize({360,120});
-    ImGui::SetNextWindowBgAlpha(0.92f);
+    ImGui::SetNextWindowPos({io.DisplaySize.x*0.5f,io.DisplaySize.y*0.5f},
+        ImGuiCond_Always,{0.5f,0.5f});
+    ImGui::SetNextWindowSize({360,110});
+    ImGui::SetNextWindowBgAlpha(0.93f);
     ImGui::Begin("##ingest",nullptr,
         ImGuiWindowFlags_NoDecoration|ImGuiWindowFlags_NoMove|
         ImGuiWindowFlags_NoSavedSettings|ImGuiWindowFlags_NoBringToFrontOnFocus);
 
-    std::string msg, err;
-    {
-        std::lock_guard<std::mutex> lk(m_ingest.mtx);
-        msg = m_ingest.message;
-        err = m_ingest.lastError;
-    }
-    int pct = m_ingest.progress.load();
+    std::string msg,err;
+    { std::lock_guard<std::mutex> lk(m_ingest.mtx); msg=m_ingest.message; err=m_ingest.lastError; }
+    int pct=m_ingest.progress.load();
 
     if (!err.empty()) {
         ImGui::TextColored({1.0f,0.4f,0.4f,1.0f},"Error:");
@@ -603,7 +655,7 @@ void App::renderIngestOverlay()
         ImGui::TextWrapped("%s",err.c_str());
         ImGui::PopTextWrapPos();
         ImGui::Spacing();
-        if (ImGui::Button("OK",{80,0})) { m_ingest.progress=0; }
+        if (ImGui::Button("OK",{80,0})) m_ingest.progress=0;
     } else {
         ImGui::TextColored(ACCENT,"Adding game...");
         ImGui::Spacing();
@@ -611,24 +663,21 @@ void App::renderIngestOverlay()
         ImGui::Spacing();
         ImGui::ProgressBar(pct/100.0f,{-1,0});
     }
-
     ImGui::End();
 }
 
-
-
-// ── launchGame ────────────────────────────────────────────────────────────────
+// ── Launch ────────────────────────────────────────────────────────────────────
 
 void App::launchGame(const GameRecord& rec)
 {
-    if (m_dosboxPath.empty() || !std::filesystem::exists(m_dosboxPath)) {
+    if (m_dosboxPath.empty() || !fs::exists(m_dosboxPath)) {
         m_launchState = LaunchState::Error;
         m_launchError = "DOSBox not found.\n\nPlace dosbox.exe inside the dosbox\\ folder next to AutoDOS2.exe.";
         return;
     }
 
-    std::filesystem::path confPath = m_confsRoot / (rec.slug + ".conf");
-    if (!std::filesystem::exists(confPath)) {
+    fs::path confPath = m_confsRoot / (rec.slug + ".conf");
+    if (!fs::exists(confPath)) {
         m_launchState = LaunchState::Error;
         m_launchError = "No .conf found for: " + rec.title + "\n\nTry removing and re-adding the game.";
         return;
@@ -642,38 +691,30 @@ void App::launchGame(const GameRecord& rec)
     si.dwFlags             = STARTF_USESHOWWINDOW;
     si.wShowWindow         = SW_SHOWNORMAL;
 
-    if (!CreateProcessA(nullptr, const_cast<char*>(cmd.c_str()),
-                        nullptr, nullptr, FALSE, 0,
-                        nullptr, nullptr, &si, &pi)) {
+    if (!CreateProcessA(nullptr,const_cast<char*>(cmd.c_str()),
+                        nullptr,nullptr,FALSE,0,nullptr,nullptr,&si,&pi)) {
         m_launchState = LaunchState::Error;
         m_launchError = "Failed to launch DOSBox.\nCommand: " + cmd;
         return;
     }
 
     m_launchState = LaunchState::Running;
-
-    // Record play
     m_db.recordPlay(rec.id);
     refreshLibrary();
 
-    // Wait for DOSBox in detached thread, then bring AutoDOS2 back to front
-    HANDLE hProc = pi.hProcess;
     SDL_SysWMinfo wmInfo = {};
     SDL_VERSION(&wmInfo.version);
     HWND hWnd = nullptr;
-    if (SDL_GetWindowWMInfo(m_window, &wmInfo))
-        hWnd = wmInfo.info.win.window;
+    if (SDL_GetWindowWMInfo(m_window,&wmInfo)) hWnd = wmInfo.info.win.window;
 
     CloseHandle(pi.hThread);
+    HANDLE hProc = pi.hProcess;
 
-    std::thread([this, hProc, hWnd]() {
-        WaitForSingleObject(hProc, INFINITE);
+    std::thread([this,hProc,hWnd]() {
+        WaitForSingleObject(hProc,INFINITE);
         CloseHandle(hProc);
         m_launchState = LaunchState::Idle;
-        if (hWnd) {
-            SetForegroundWindow(hWnd);
-            ShowWindow(hWnd, SW_RESTORE);
-        }
+        if (hWnd) { SetForegroundWindow(hWnd); ShowWindow(hWnd,SW_RESTORE); }
     }).detach();
 #else
     (void)rec;
@@ -682,29 +723,116 @@ void App::launchGame(const GameRecord& rec)
 #endif
 }
 
-// ── renderLaunchError ─────────────────────────────────────────────────────────
-
 void App::renderLaunchError()
 {
     const ImGuiIO& io = ImGui::GetIO();
-    ImGui::SetNextWindowPos({io.DisplaySize.x * 0.5f, io.DisplaySize.y * 0.5f},
-        ImGuiCond_Always, {0.5f, 0.5f});
-    ImGui::SetNextWindowSize({400, 160});
+    ImGui::SetNextWindowPos({io.DisplaySize.x*0.5f,io.DisplaySize.y*0.5f},
+        ImGuiCond_Always,{0.5f,0.5f});
+    ImGui::SetNextWindowSize({400,160});
     ImGui::SetNextWindowBgAlpha(0.95f);
-    ImGui::Begin("##launcherr", nullptr,
-        ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove |
+    ImGui::Begin("##launcherr",nullptr,
+        ImGuiWindowFlags_NoDecoration|ImGuiWindowFlags_NoMove|
         ImGuiWindowFlags_NoSavedSettings);
-
-    ImGui::TextColored({1.0f, 0.4f, 0.4f, 1.0f}, "Launch Error");
-    ImGui::Separator();
-    ImGui::Spacing();
+    ImGui::TextColored({1.0f,0.4f,0.4f,1.0f},"Launch Error");
+    ImGui::Separator(); ImGui::Spacing();
     ImGui::PushTextWrapPos(380);
-    ImGui::TextWrapped("%s", m_launchError.c_str());
+    ImGui::TextWrapped("%s",m_launchError.c_str());
     ImGui::PopTextWrapPos();
     ImGui::Spacing();
-    if (ImGui::Button("OK", {80, 0}))
-        m_launchState = LaunchState::Idle;
+    if (ImGui::Button("OK",{80,0})) m_launchState=LaunchState::Idle;
+    ImGui::End();
+}
 
+// ── Settings panel ────────────────────────────────────────────────────────────
+
+void App::renderSettingsPanel()
+{
+    const ImGuiIO& io = ImGui::GetIO();
+    ImGui::SetNextWindowPos({io.DisplaySize.x*0.5f,io.DisplaySize.y*0.5f},
+        ImGuiCond_Always,{0.5f,0.5f});
+    ImGui::SetNextWindowSize({520,300});
+    ImGui::Begin("Settings",&m_showSettings,
+        ImGuiWindowFlags_NoResize|ImGuiWindowFlags_NoCollapse);
+
+    ImGui::TextColored(ACCENT,"DOSBox Staging");
+    ImGui::Separator(); ImGui::Spacing();
+
+    static char dosboxBuf[512] = {};
+    if (dosboxBuf[0]=='\0') strncpy(dosboxBuf,m_settings.dosboxPath.c_str(),511);
+    ImGui::Text("Path:");
+    ImGui::SetNextItemWidth(-88);
+    ImGui::InputText("##dosbox",dosboxBuf,sizeof(dosboxBuf));
+    ImGui::SameLine();
+    if (ImGui::Button("Browse##db",{80,0})) {
+        auto p=openFileDialog("Executable","*.exe");
+        if (!p.empty()) strncpy(dosboxBuf,p.string().c_str(),511);
+    }
+
+    ImGui::Spacing();
+    ImGui::TextColored(ACCENT,"Defaults");
+    ImGui::Separator(); ImGui::Spacing();
+
+    static char cyclesBuf[64] = {};
+    if (cyclesBuf[0]=='\0') strncpy(cyclesBuf,m_settings.defaultCycles.c_str(),63);
+    ImGui::Text("Cycles:");
+    ImGui::SetNextItemWidth(220);
+    ImGui::InputText("##cycles",cyclesBuf,sizeof(cyclesBuf));
+    ImGui::SameLine(); ImGui::TextDisabled("auto / max / max limit 80000 / 30000");
+
+    ImGui::Spacing();
+    ImGui::Checkbox("Launch games in fullscreen",&m_settings.fullscreen);
+
+    ImGui::Spacing();
+    ImGui::TextColored(ACCENT,"Info");
+    ImGui::Separator(); ImGui::Spacing();
+    ImGui::TextDisabled("Data: %s",m_settings.dataDir.c_str());
+
+    ImGui::Spacing(); ImGui::Spacing();
+    if (ImGui::Button("Save",{100,0})) {
+        m_settings.dosboxPath    = dosboxBuf;
+        m_settings.defaultCycles = cyclesBuf;
+        m_settings.save(m_configPath);
+        m_dosboxPath = m_settings.dosboxPath;
+        m_showSettings = false;
+        dosboxBuf[0]='\0'; cyclesBuf[0]='\0';
+    }
+    ImGui::SameLine();
+    if (ImGui::Button("Cancel",{100,0})) {
+        m_showSettings=false; dosboxBuf[0]='\0'; cyclesBuf[0]='\0';
+    }
+    ImGui::SameLine();
+    if (ImGui::Button("About AutoDOS2",{140,0})) {
+        m_showSettings=false; m_showAbout=true;
+        dosboxBuf[0]='\0'; cyclesBuf[0]='\0';
+    }
+    ImGui::End();
+}
+
+// ── About panel ───────────────────────────────────────────────────────────────
+
+void App::renderAboutPanel()
+{
+    const ImGuiIO& io = ImGui::GetIO();
+    ImGui::SetNextWindowPos({io.DisplaySize.x*0.5f,io.DisplaySize.y*0.5f},
+        ImGuiCond_Always,{0.5f,0.5f});
+    ImGui::SetNextWindowSize({380,230});
+    ImGui::Begin("About AutoDOS2",&m_showAbout,
+        ImGuiWindowFlags_NoResize|ImGuiWindowFlags_NoCollapse);
+
+    ImGui::TextColored(ACCENT,"AutoDOS2");
+    ImGui::SameLine();
+    ImGui::TextDisabled("v%d.%d.%d",
+        AUTODOS2_VERSION_MAJOR,AUTODOS2_VERSION_MINOR,AUTODOS2_VERSION_PATCH);
+    ImGui::Spacing();
+    ImGui::TextWrapped("Cross-platform DOS game frontend.");
+    ImGui::Spacing(); ImGui::Separator(); ImGui::Spacing();
+    ImGui::TextDisabled("Powered by:");
+    ImGui::BulletText("DOSBox Staging");
+    ImGui::BulletText("eXoDOS database (%d entries)", m_gameJson.count());
+    ImGui::BulletText("SDL2 + Dear ImGui");
+    ImGui::BulletText("SQLite + nlohmann/json");
+    ImGui::Spacing(); ImGui::Separator(); ImGui::Spacing();
+    if (ImGui::Button("Close",{100,0})) m_showAbout=false;
     ImGui::End();
 }
 
