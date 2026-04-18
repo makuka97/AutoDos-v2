@@ -5,9 +5,8 @@
 #include <string>
 #include <vector>
 
-// Forward-declare sqlite3 types OUTSIDE any namespace
+// Forward-declare sqlite3 so we don't pull in sqlite3.h everywhere
 struct sqlite3;
-struct sqlite3_stmt;
 
 namespace AutoDOS2 {
 
@@ -65,6 +64,13 @@ public:
 
     // Increment play_count and update last_played for the given id.
     bool recordPlay(int id);
+
+    // ── Save state tracking ──────────────────────────────────────────────────
+    // Record that a save state exists for a game (called when user presses Ctrl+F5)
+    bool recordSave(int gameId);
+
+    // Returns true if any save state has been recorded for this game
+    bool hasSave(int gameId);
 
     // Total number of games in the DB.
     int count();
