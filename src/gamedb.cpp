@@ -277,13 +277,11 @@ int GameDB::count()
     return n;
 }
 
-} // namespace AutoDOS2
-
 // ── Save state tracking ───────────────────────────────────────────────────────
 
 bool GameDB::recordSave(int gameId)
 {
-    const char* sql = "INSERT INTO saves (game_id) VALUES (?);";
+    const char* sql = "INSERT INTO saves (game_id) VALUES (?)";
     sqlite3_stmt* stmt = nullptr;
     if (sqlite3_prepare_v2(m_db, sql, -1, &stmt, nullptr) != SQLITE_OK) return false;
     sqlite3_bind_int(stmt, 1, gameId);
@@ -294,7 +292,7 @@ bool GameDB::recordSave(int gameId)
 
 bool GameDB::hasSave(int gameId)
 {
-    const char* sql = "SELECT COUNT(*) FROM saves WHERE game_id = ?;";
+    const char* sql = "SELECT COUNT(*) FROM saves WHERE game_id = ?";
     sqlite3_stmt* stmt = nullptr;
     if (sqlite3_prepare_v2(m_db, sql, -1, &stmt, nullptr) != SQLITE_OK) return false;
     sqlite3_bind_int(stmt, 1, gameId);
@@ -303,3 +301,5 @@ bool GameDB::hasSave(int gameId)
     sqlite3_finalize(stmt);
     return n > 0;
 }
+
+} // namespace AutoDOS2
