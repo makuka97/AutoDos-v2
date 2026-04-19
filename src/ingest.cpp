@@ -51,7 +51,7 @@ static bool isBlacklisted(const std::string& stem) {
         "dos4gw","cwsdpmi","himemx","emm386",
         "fixsave","fix","convert","copy","move",
         "dosbox","dosbox_staging","dosbox-x","dosboxx","scummvm","boxer",
-        "loadpats","intro","movie","logo","start","run"
+        "loadpats","intro","movie","logo","start","run","main"
     };
     std::string lo = toLower(stem);
     for (auto& b : BL) if (lo == b) return true;
@@ -204,7 +204,6 @@ const GameEntry* GameDatabase::byTitle(const std::string& archiveName) const
 {
     if (m_bySlug.empty()) return nullptr;
 
-    // Build normalized archive slug: & -> and, alphanumeric only, strip noise
     std::string archiveSlug = stripNoiseSuffix(normalizeSlug(archiveName));
     std::vector<std::string> archiveWords = extractWords(archiveName);
 
@@ -339,7 +338,7 @@ Ingestor::scanExtractedDir(const fs::path& dir, const std::string& archiveStem) 
 
             if (stem == stemLo || stem.find(stemLo) == 0 || stemLo.find(stem) == 0)
                 score += 0.5f;
-            if (stem == "game" || stem == "play" || stem == "main" || stem == "go")
+            if (stem == "game" || stem == "play" || stem == "go")
                 score += 0.15f;
 
             fs::path rel = fs::relative(entry.path(), dir, ec);
