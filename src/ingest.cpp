@@ -640,8 +640,6 @@ AnalyzeResult Ingestor::ingest(const fs::path& archivePath, ProgressFn progress)
 }
 
 // ── ingestFolder — for pre-extracted CD/ISO games ─────────────────────────────
-// User unzipped the game themselves and points us at the folder.
-// We scan for ISOs/EXEs, match games.json, write conf, no extraction needed.
 
 AnalyzeResult Ingestor::ingestFolder(const fs::path& folderPath)
 {
@@ -652,39 +650,33 @@ AnalyzeResult Ingestor::ingestFolder(const fs::path& folderPath)
         return result;
     }
 
-    // Use the folder name as the slug hint
     std::string folderName = folderPath.filename().string();
     std::string slug       = slugify(folderName);
 
-    // ── Step 1: collect all EXEs and ISOs recursively ──────────────────────
+    // Collect EXEs and ISOs recursively
     std::vector<std::string> exeNames;
     std::vector<std::string> isoFiles;
     std::error_code ec;
 
     for (auto& f : fs::recursive_directory_iterator(folderPath, ec)) {
         if (!f.is_regular_file(ec)) continue;
-        std::string ext = toUpper(f.path().extension().string());
-        std::string fnUp = toUpper(f.path().filename().string());
-
-        // Skip bundled emulator folders
+        std::string ext  = toUpper(f.path().extension().string());
         bool skip = false;
         for (auto& seg : f.path())
             if (toLower(seg.string()) == "dosbox" || toLower(seg.string()) == "dosbox-x")
                 { skip = true; break; }
         if (skip) continue;
-
         if (ext == ".EXE" || ext == ".COM" || ext == ".BAT")
-            exeNames.push_back(fnUp);
+            exeNames.push_back(toUpper(f.path().filename().string()));
         else if (ext == ".ISO" || ext == ".CUE" || ext == ".MDF")
             isoFiles.push_back(f.path().string());
     }
     std::sort(isoFiles.begin(), isoFiles.end());
 
-    // ── Step 2: match against games.json ───────────────────────────────────
+    // Match against games.json
     const GameEntry* entry = nullptr;
-
-    // Try exe match first
     if (m_db) {
+        // Try exe match
         for (auto& exeName : exeNames) {
             std::string s = toLower(exeName.substr(0, exeName.rfind('.')));
             if (isBlacklisted(s)) continue;
@@ -699,25 +691,26 @@ AnalyzeResult Ingestor::ingestFolder(const fs::path& folderPath)
             entry = m_db->bySlug(noYear);
             if (entry) slug = noYear;
         }
-        // If still no match and we have ISOs, scan inside first ISO for exe names
+        // Try scanning inside first ISO for exe names
         if (!entry && !isoFiles.empty()) {
             std::string listing = run7za("l \"" + isoFiles[0] + "\"");
             std::istringstream ss(listing);
             std::string line;
             while (std::getline(ss, line)) {
                 if (line.size() < 4) continue;
-                std::string ext = toUpper(line.substr(line.size()-3));
-                if (ext == "EXE" || ext == "COM") {
-                    size_t sp = line.rfind(' ');
-                    std::string fname = (sp != std::string::npos) ? line.substr(sp+1) : line;
-                    fname = toUpper(fname);
-                    size_t sl = fname.find_last_of("/\\");
-                    if (sl != std::string::npos) fname = fname.substr(sl+1);
-                    if (!fname.empty()) {
-                        entry = m_db->byExe(fname);
-                        if (entry) break;
-                    }
-                }
+                std::string up = toUpper(line);
+                std::string ext3 = up.size() >= 3 ? up.substr(up.size()-3) : "";
+                if (ext3 != "EXE" && ext3 != "COM") continue;
+                size_t sp = line.rfind(' ');
+                std::string fname = (sp != std::string::npos) ? line.substr(sp+1) : line;
+                size_t sl2 = fname.find_last_of("/\\");
+                std::string name = (sl2 != std::string::npos) ? fname.substr(sl2+1) : fname;
+                name = toUpper(name);
+                if (name.empty()) continue;
+                std::string stem = toLower(name.substr(0, name.rfind('.')));
+                if (isBlacklisted(stem)) continue;
+                entry = m_db->byExe(name);
+                if (entry) break;
             }
         }
     }
@@ -733,50 +726,48 @@ AnalyzeResult Ingestor::ingestFolder(const fs::path& folderPath)
         result.xms         = entry->xms;
         result.cdMount     = entry->cdMount;
         result.installFirst= entry->installFirst;
-        result.source      = "exe_match";
+        result.source      = "matched";
         result.confidence  = 1.0f;
     } else {
-        // Unknown game — use folder name as title
         result.slug       = slug;
         result.title      = folderName;
         result.source     = "scored";
         result.confidence = 0.5f;
         result.cdMount    = !isoFiles.empty();
-
-        // Pick best exe
-        auto candidates = scanExtractedDir(folderPath, folderName);
+        auto candidates   = scanExtractedDir(folderPath, folderName);
         if (!candidates.empty()) result.exe = candidates[0].name;
     }
 
     result.gameType = isoFiles.empty() ? "SIMPLE" : "CD_BASED";
+    result.success  = true;
 
-    // ── Step 3: symlink/copy the folder into extractRoot ───────────────────
-    // Instead of extracting, we just point the conf at the original folder.
-    // We still create a stub entry in extractRoot so the rest of the pipeline
-    // works (conf lives next to it, art lives in art/).
+    // Create stub folder
     fs::path extractDir = m_extractRoot / result.slug;
     if (!fs::exists(extractDir)) {
-        // Create a small marker file so we know this is a folder-linked game
         fs::create_directories(extractDir, ec);
         std::ofstream marker(extractDir / ".folder_link");
         marker << folderPath.string();
     }
 
-    // ── Step 4: write conf pointing at the ORIGINAL folder ─────────────────
-    // Override extractedDir with the user's actual folder path
+    // Write conf pointing at original folder
     fs::path confPath = m_confsRoot / (result.slug + ".conf");
     if (!fs::exists(confPath)) {
-        // Build the conf manually — use the original folder path as mount point
         std::string mountDir = folderPath.string();
+        std::string exeName  = result.exe;
+        {
+            size_t sl = exeName.find_last_of("/\\");
+            if (sl != std::string::npos) exeName = exeName.substr(sl+1);
+        }
 
-        // Find exe on disk if db entry has one
-        if (!result.exe.empty()) {
-            std::error_code ec2;
-            std::string exeUp = toUpper(result.exe);
-            for (auto& f : fs::recursive_directory_iterator(folderPath, ec2)) {
-                if (!f.is_regular_file(ec2)) continue;
+        // Find exe on disk to get correct mount dir
+        bool exeOnDisk = false;
+        if (!exeName.empty()) {
+            std::string exeUp = toUpper(exeName);
+            for (auto& f : fs::recursive_directory_iterator(folderPath, ec)) {
+                if (!f.is_regular_file(ec)) continue;
                 if (toUpper(f.path().filename().string()) == exeUp) {
-                    mountDir = f.path().parent_path().string();
+                    mountDir  = f.path().parent_path().string();
+                    exeOnDisk = true;
                     break;
                 }
             }
@@ -784,8 +775,6 @@ AnalyzeResult Ingestor::ingestFolder(const fs::path& folderPath)
 
         std::string cycles  = result.cycles.empty() ? "max limit 80000" : result.cycles;
         int         memsize = result.memsize > 0 ? result.memsize : 16;
-        std::string exeName = result.exe;
-        { size_t sl=exeName.find_last_of("/\\"); if(sl!=std::string::npos) exeName=exeName.substr(sl+1); }
 
         std::ostringstream autoexec;
         autoexec << "@echo off\r\n";
@@ -797,31 +786,23 @@ AnalyzeResult Ingestor::ingestFolder(const fs::path& folderPath)
             autoexec << " -t iso\r\n";
         }
 
-
-
-        // Launch from D: if no exe on disk (exe lives on CD)
-        if (!isoFiles.empty() && exeName.empty()) {
+        if (!isoFiles.empty() && !exeOnDisk) {
+            // Exe is on the CD
             autoexec << "D:\r\n";
-            std::string launchExe = result.exe;
-            size_t sl = launchExe.find_last_of("/\\");
-            if (sl != std::string::npos) launchExe = launchExe.substr(sl+1);
-            if (!launchExe.empty()) autoexec << launchExe << "\r\n";
-        } else if (!isoFiles.empty() && !exeName.empty()) {
-            autoexec << "D:\r\n";
-            autoexec << exeName << "\r\n";
+            if (!exeName.empty()) autoexec << exeName << "\r\n";
         } else {
             autoexec << "C:\r\n";
             if (!exeName.empty()) autoexec << exeName << "\r\n";
         }
-
+        autoexec << "exit\r\n";
 
         std::ostringstream conf;
         conf << "[sdl]\r\nfullscreen=true\r\nfullresolution=desktop\r\noutput=opengl\r\n\r\n";
         conf << "[dosbox]\r\nmachine=svga_s3\r\nmemsize=" << memsize << "\r\n\r\n";
         conf << "[cpu]\r\ncore=auto\r\ncputype=auto\r\ncpu_cycles=" << cycles << "\r\n";
         conf << "cycleup=500\r\ncycledown=20\r\n\r\n";
-        conf << "[dos]\r\nems=" << (result.ems?"true":"false") << "\r\n";
-        conf << "xms=" << (result.xms?"true":"false") << "\r\n\r\n";
+        conf << "[dos]\r\nems=" << (result.ems ? "true" : "false") << "\r\n";
+        conf << "xms=" << (result.xms ? "true" : "false") << "\r\n\r\n";
         conf << "[mixer]\r\nrate=44100\r\nblocksize=1024\r\nprebuffer=20\r\n\r\n";
         conf << "[render]\r\naspect=true\r\n\r\n";
         conf << "[autoexec]\r\n" << autoexec.str() << "\r\n";
@@ -831,7 +812,6 @@ AnalyzeResult Ingestor::ingestFolder(const fs::path& folderPath)
         if (out.is_open()) out << conf.str();
     }
 
-    result.success = true;
     return result;
 }
 
