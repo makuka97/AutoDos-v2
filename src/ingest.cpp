@@ -395,6 +395,45 @@ AnalyzeResult Ingestor::analyze(const fs::path& archivePath) const
     return result;
 }
 
+// ── scanIsoForExe — find best exe inside an ISO using 7za ────────────────────
+
+std::string Ingestor::scanIsoForExe(const std::string& isoPath) const
+{
+    std::string listing = run7za("l \"" + isoPath + "\"");
+    if (listing.empty()) return "";
+
+    std::vector<std::pair<float,std::string>> candidates;
+    std::istringstream ss(listing);
+    std::string line;
+
+    while (std::getline(ss, line)) {
+        if (line.size() < 4) continue;
+        // 7za output lines end with the filename after spaces
+        // Look for .EXE or .COM at end of line
+        std::string up = toUpper(line);
+        if (up.size() < 4) continue;
+        std::string ext = up.substr(up.size()-3);
+        if (ext != "EXE" && ext != "COM" && ext != "BAT") continue;
+
+        // Extract filename from end of line
+        size_t sp = line.rfind(' ');
+        std::string fname = (sp != std::string::npos) ? line.substr(sp+1) : line;
+        // Remove path, keep just filename
+        size_t sl = fname.find_last_of("/\\");
+        std::string name = (sl != std::string::npos) ? fname.substr(sl+1) : fname;
+        name = toUpper(name);
+        if (name.empty()) continue;
+
+        std::string stem = toLower(name.substr(0, name.rfind('.')));
+        if (isBlacklisted(stem)) continue;
+
+        candidates.push_back({1.0f, name});
+    }
+
+    if (candidates.empty()) return "";
+    return candidates[0].second;
+}
+
 // ── writeDosboxConf ───────────────────────────────────────────────────────────
 
 bool Ingestor::writeDosboxConf(const fs::path& extractedDir,
@@ -454,11 +493,34 @@ bool Ingestor::writeDosboxConf(const fs::path& extractedDir,
         }
 
         if (!found) {
-            auto candidates = scanExtractedDir(extractedDir, result.slug);
-            if (!candidates.empty()) {
-                fs::path bestExe = extractedDir / candidates[0].relPath;
-                exeName  = candidates[0].name;
-                mountDir = bestExe.parent_path().string();
+            // Try scanning inside ISOs first (exe lives on disc)
+            bool foundInIso = false;
+            if (!isoFiles.empty()) {
+                std::string isoExe = scanIsoForExe(isoFiles[0]);
+                if (!isoExe.empty()) {
+                    // Also try to match against DB
+                    if (m_db) {
+                        const GameEntry* e = m_db->byExe(isoExe);
+                        if (e) {
+                            // Update result with correct DB entry
+                            exeName = isoExe;
+                            foundInIso = true;
+                        }
+                    }
+                    if (!foundInIso) {
+                        exeName = isoExe;
+                        foundInIso = true;
+                    }
+                }
+            }
+            // Fall back to scanning filesystem
+            if (!foundInIso) {
+                auto candidates = scanExtractedDir(extractedDir, result.slug);
+                if (!candidates.empty()) {
+                    fs::path bestExe = extractedDir / candidates[0].relPath;
+                    exeName  = candidates[0].name;
+                    mountDir = bestExe.parent_path().string();
+                }
             }
         }
     }
@@ -469,29 +531,35 @@ bool Ingestor::writeDosboxConf(const fs::path& extractedDir,
     std::ostringstream autoexec;
     autoexec << "@echo off\r\n";
 
+    // Check if exe actually exists on disk (not inside an ISO)
+    bool exeOnDisk = false;
+    if (!exeName.empty()) {
+        std::error_code ec2;
+        std::string exeUp = toUpper(exeName);
+        for (auto& f : fs::recursive_directory_iterator(extractedDir, ec2)) {
+            if (!f.is_regular_file(ec2)) continue;
+            if (toUpper(f.path().filename().string()) == exeUp) { exeOnDisk = true; break; }
+        }
+    }
+
     if (result.cdMount && !isoFiles.empty()) {
         // ── CD-based game ─────────────────────────────────────────────────────
-        // Mount C: as a writable drive for saves, D: as the CD
         autoexec << "mount C \"" << mountDir << "\"\r\n";
+        autoexec << "imgmount D";
+        for (auto& iso : isoFiles) autoexec << " \"" << iso << "\"";
+        autoexec << " -t iso\r\n";
 
-        if (isoFiles.size() == 1) {
-            // Single disc
-            autoexec << "imgmount D \"" << isoFiles[0] << "\" -t iso\r\n";
+        if (exeOnDisk) {
+            // Exe is on the filesystem (C:)
             autoexec << "C:\r\n";
             autoexec << exeName << "\r\n";
         } else {
-            // Multi-disc — mount all ISOs as a swappable disc set
-            // DOSBox Staging supports multiple images on one imgmount line
-            autoexec << "imgmount D";
-            for (auto& iso : isoFiles)
-                autoexec << " \"" << iso << "\"";
-            autoexec << " -t iso\r\n";
-            autoexec << "C:\r\n";
+            // Exe is on the CD (D:) — common for ISO-only games
+            autoexec << "D:\r\n";
             autoexec << exeName << "\r\n";
         }
     } else if (result.cdMount && isoFiles.empty()) {
-        // cd_mount=true but no ISO found — game exe is on the C: drive,
-        // CD is just for music/video. Mount C: normally.
+        // cd_mount=true but no ISO — exe is on C:, CD just for music
         autoexec << "mount C \"" << mountDir << "\"\r\n";
         autoexec << "C:\r\n";
         autoexec << exeName << "\r\n";
@@ -618,6 +686,27 @@ AnalyzeResult Ingestor::ingestFolder(const fs::path& folderPath)
             std::string noYear = slug.substr(0, slug.size() - 4);
             entry = m_db->bySlug(noYear);
             if (entry) slug = noYear;
+        }
+        // If still no match and we have ISOs, scan inside first ISO for exe names
+        if (!entry && !isoFiles.empty()) {
+            std::string listing = run7za("l \"" + isoFiles[0] + "\"");
+            std::istringstream ss(listing);
+            std::string line;
+            while (std::getline(ss, line)) {
+                if (line.size() < 4) continue;
+                std::string ext = toUpper(line.substr(line.size()-3));
+                if (ext == "EXE" || ext == "COM") {
+                    size_t sp = line.rfind(' ');
+                    std::string fname = (sp != std::string::npos) ? line.substr(sp+1) : line;
+                    fname = toUpper(fname);
+                    size_t sl = fname.find_last_of("/\\");
+                    if (sl != std::string::npos) fname = fname.substr(sl+1);
+                    if (!fname.empty()) {
+                        entry = m_db->byExe(fname);
+                        if (entry) break;
+                    }
+                }
+            }
         }
     }
 
