@@ -508,7 +508,7 @@ bool Ingestor::writeDosboxConf(const fs::path& extractedDir,
     std::ostringstream conf;
     conf << "[sdl]\r\nfullscreen=true\r\nfullresolution=desktop\r\noutput=openglnb\r\n\r\n";
     conf << "[dosbox]\r\nmachine=svga_s3\r\nmemsize=" << memsize << "\r\n\r\n";
-    conf << "[cpu]\r\ncore=dynamic\r\ncputype=pentium_slow\r\ncycles=" << cycles << "\r\n";
+    conf << "[cpu]\r\ncore=auto\r\ncputype=auto\r\ncycles=" << cycles << "\r\n";
     conf << "cycleup=500\r\ncycledown=20\r\n\r\n";
     conf << "[dos]\r\nems=" << (result.ems ? "true" : "false") << "\r\n";
     conf << "xms=" << (result.xms ? "true" : "false") << "\r\n\r\n";
@@ -704,7 +704,7 @@ AnalyzeResult Ingestor::ingestFolder(const fs::path& folderPath)
         std::ostringstream conf;
         conf << "[sdl]\r\nfullscreen=true\r\nfullresolution=desktop\r\noutput=openglnb\r\n\r\n";
         conf << "[dosbox]\r\nmachine=svga_s3\r\nmemsize=" << memsize << "\r\n\r\n";
-        conf << "[cpu]\r\ncore=dynamic\r\ncputype=pentium_slow\r\ncycles=" << cycles << "\r\n";
+        conf << "[cpu]\r\ncore=auto\r\ncputype=auto\r\ncycles=" << cycles << "\r\n";
         conf << "cycleup=500\r\ncycledown=20\r\n\r\n";
         conf << "[dos]\r\nems=" << (result.ems?"true":"false") << "\r\n";
         conf << "xms=" << (result.xms?"true":"false") << "\r\n\r\n";
