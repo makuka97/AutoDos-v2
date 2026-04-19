@@ -143,6 +143,29 @@ const GameEntry* GameDatabase::byExe(const std::string& exeName) const
 
 // -- byTitle - fuzzy title matching ------------------------------------------
 
+// Normalize & -> and, keep alphanumeric lowercase only
+static std::string normalizeSlug(const std::string& s) {
+    std::string tmp;
+    for (char c : s) {
+        if (c == '&') tmp += "and";
+        else if (std::isalnum((unsigned char)c)) tmp += std::tolower((unsigned char)c);
+    }
+    return tmp;
+}
+
+// Strip common noise suffixes from a slug
+static std::string stripNoiseSuffix(std::string slug) {
+    static const std::vector<std::string> NOISE = {
+        "doswin","dosxp","dos","win","cd","hdd","gog","rip"
+    };
+    for (auto& sfx : NOISE) {
+        if (slug.size() > sfx.size() &&
+            slug.substr(slug.size() - sfx.size()) == sfx)
+            slug = slug.substr(0, slug.size() - sfx.size());
+    }
+    return slug;
+}
+
 static std::vector<std::string> extractWords(const std::string& s) {
     // Convert to lowercase, replace separators with spaces, split into words
     std::string cleaned;
