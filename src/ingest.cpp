@@ -1,4 +1,4 @@
-=// ingest.cpp — Phase 04/05 ZIP ingest pipeline
+// ingest.cpp -- Phase 04/05 ZIP ingest pipeline
 #include "ingest.h"
 
 #include <nlohmann/json.hpp>
@@ -536,7 +536,7 @@ bool Ingestor::writeDosboxConf(const fs::path& extractedDir,
     return true;
 }
 
-// ── ingest — full pipeline ────────────────────────────────────────────────────
+// ── ingest -- full pipeline ────────────────────────────────────────────────────
 
 AnalyzeResult Ingestor::ingest(const fs::path& archivePath, ProgressFn progress)
 {
@@ -570,7 +570,7 @@ AnalyzeResult Ingestor::ingest(const fs::path& archivePath, ProgressFn progress)
     return result;
 }
 
-// ── ingestFolder — for pre-extracted CD/ISO games ─────────────────────────────
+// ── ingestFolder -- for pre-extracted CD/ISO games ─────────────────────────────
 
 AnalyzeResult Ingestor::ingestFolder(const fs::path& folderPath)
 {
@@ -633,7 +633,7 @@ AnalyzeResult Ingestor::ingestFolder(const fs::path& folderPath)
                 if (entry) slug = noYear;
             }
         }
-        // Note: ISO scanning removed — Mode 2/XA ISOs cannot be read by 7za.
+        // Note: ISO scanning removed -- Mode 2/XA ISOs cannot be read by 7za.
         // Add manual entries to games.json for ISO-only games (e.g. wc3hott).
     }
 
