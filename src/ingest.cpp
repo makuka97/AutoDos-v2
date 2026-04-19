@@ -21,7 +21,7 @@ namespace fs = std::filesystem;
 
 namespace AutoDOS2 {
 
-// ── String helpers ────────────────────────────────────────────────────────────
+// -- String helpers ------------------------------------------------------------
 
 std::string toUpper(const std::string& s) {
     std::string r = s;
@@ -58,7 +58,7 @@ static bool isBlacklisted(const std::string& stem) {
     return false;
 }
 
-// ── GameDatabase ──────────────────────────────────────────────────────────────
+// -- GameDatabase --------------------------------------------------------------
 
 bool GameDatabase::load(const fs::path& jsonPath)
 {
@@ -141,7 +141,77 @@ const GameEntry* GameDatabase::byExe(const std::string& exeName) const
     return bySlug(it->second);
 }
 
-// ── run7za ────────────────────────────────────────────────────────────────────
+// -- byTitle - fuzzy title matching ------------------------------------------
+
+static std::vector<std::string> extractWords(const std::string& s) {
+    // Convert to lowercase, replace separators with spaces, split into words
+    std::string cleaned;
+    for (char c : s) {
+        if (std::isalnum((unsigned char)c)) cleaned += std::tolower((unsigned char)c);
+        else cleaned += ' ';
+    }
+
+    // Strip common non-title suffixes: DOS, EN, WIN, version numbers, years
+    static const std::vector<std::string> STRIP = {
+        "dos", "en", "win", "pc", "cd", "v1", "v2", "v3", "v4", "v5",
+        "lite", "demo", "shareware", "floppy", "hdd", "gog", "rip",
+        "patched", "cracked", "nocd", "ost"
+    };
+
+    std::istringstream ss(cleaned);
+    std::vector<std::string> words;
+    std::string w;
+    while (ss >> w) {
+        // Skip pure numbers (years, version numbers)
+        bool allDigits = true;
+        for (char c : w) if (!std::isdigit((unsigned char)c)) { allDigits = false; break; }
+        if (allDigits) continue;
+        // Skip short noise words
+        if (w.size() <= 1) continue;
+        // Skip common suffixes
+        bool skip = false;
+        for (auto& sfx : STRIP) if (w == sfx) { skip = true; break; }
+        if (skip) continue;
+        words.push_back(w);
+    }
+    return words;
+}
+
+const GameEntry* GameDatabase::byTitle(const std::string& archiveName) const
+{
+    if (m_bySlug.empty()) return nullptr;
+
+    std::vector<std::string> archiveWords = extractWords(archiveName);
+    if (archiveWords.empty()) return nullptr;
+
+    const GameEntry* bestEntry = nullptr;
+    float bestScore = 0.0f;
+    const float MIN_SCORE = 0.60f; // at least 60% word overlap required
+
+    for (auto& [slug, entry] : m_bySlug) {
+        std::vector<std::string> titleWords = extractWords(entry.title);
+        if (titleWords.empty()) continue;
+
+        // Count words from archive that appear in title
+        int matches = 0;
+        for (auto& aw : archiveWords)
+            for (auto& tw : titleWords)
+                if (aw == tw) { matches++; break; }
+
+        // Score = matched words / max(archiveWords, titleWords)
+        // This penalises both missing words and extra words
+        float score = (float)matches / std::max(archiveWords.size(), titleWords.size());
+
+        if (score > bestScore) {
+            bestScore = score;
+            bestEntry = &entry;
+        }
+    }
+
+    return (bestScore >= MIN_SCORE) ? bestEntry : nullptr;
+}
+
+// -- run7za --------------------------------------------------------------------
 
 std::string Ingestor::run7za(const std::string& args) const
 {
@@ -184,7 +254,7 @@ std::string Ingestor::run7za(const std::string& args) const
 #endif
 }
 
-// ── extract7za ────────────────────────────────────────────────────────────────
+// -- extract7za ----------------------------------------------------------------
 
 bool Ingestor::extract7za(const fs::path& archive, const fs::path& outDir) const
 {
@@ -196,7 +266,7 @@ bool Ingestor::extract7za(const fs::path& archive, const fs::path& outDir) const
         || out.find("extracted")         != std::string::npos;
 }
 
-// ── scanExtractedDir ──────────────────────────────────────────────────────────
+// -- scanExtractedDir ----------------------------------------------------------
 
 std::vector<Ingestor::ExeCandidate>
 Ingestor::scanExtractedDir(const fs::path& dir, const std::string& archiveStem) const
@@ -245,7 +315,7 @@ Ingestor::scanExtractedDir(const fs::path& dir, const std::string& archiveStem) 
     return candidates;
 }
 
-// ── scanIsoForExe ─────────────────────────────────────────────────────────────
+// -- scanIsoForExe -------------------------------------------------------------
 
 std::string Ingestor::scanIsoForExe(const std::string& isoPath) const
 {
@@ -279,7 +349,7 @@ std::string Ingestor::scanIsoForExe(const std::string& isoPath) const
     return candidates[0].second;
 }
 
-// ── analyze ───────────────────────────────────────────────────────────────────
+// -- analyze -------------------------------------------------------------------
 
 AnalyzeResult Ingestor::analyze(const fs::path& archivePath) const
 {
@@ -391,7 +461,33 @@ AnalyzeResult Ingestor::analyze(const fs::path& archivePath) const
         }
     }
 
-    // Match 3: best scored exe
+    // Match 3: fuzzy title match against games.json
+    // Handles zips from non-ExoDOS sources with different naming conventions
+    {
+        std::string archiveStem = archivePath.stem().string();
+        if (m_db) {
+            const GameEntry* entry = m_db->byTitle(archiveStem);
+            if (entry) {
+                result.success      = true;
+                result.slug         = entry->slug;
+                result.title        = entry->title;
+                result.exe          = entry->exe;
+                result.workDir      = entry->workDir;
+                result.cycles       = entry->cycles;
+                result.memsize      = entry->memsize;
+                result.ems          = entry->ems;
+                result.xms          = entry->xms;
+                result.cdMount      = entry->cdMount;
+                result.installFirst = entry->installFirst;
+                result.source       = "title_match";
+                result.confidence   = 0.75f;
+                result.gameType     = entry->cdMount ? "CD_BASED" : "SIMPLE";
+                return result;
+            }
+        }
+    }
+
+    // Match 4: best scored exe (last resort)
     std::string archiveStem = archivePath.stem().string();
     std::string stemLo = toLower(archiveStem);
     std::vector<std::pair<float, std::string>> scored;
@@ -425,11 +521,11 @@ AnalyzeResult Ingestor::analyze(const fs::path& archivePath) const
     return result;
 }
 
-// ── writeDosboxConf ───────────────────────────────────────────────────────────
+// -- writeDosboxConf -----------------------------------------------------------
 //
 // Bulletproof logic:
-//   cd_mount=true  → trust games.json exe, run from D: (ISO)
-//   cd_mount=false → find exe on disk, mount its parent as C:
+//   cd_mount=true  -> trust games.json exe, run from D: (ISO)
+//   cd_mount=false -> find exe on disk, mount its parent as C:
 
 bool Ingestor::writeDosboxConf(const fs::path& extractedDir,
                                const AnalyzeResult& result) const
@@ -536,7 +632,7 @@ bool Ingestor::writeDosboxConf(const fs::path& extractedDir,
     return true;
 }
 
-// ── ingest -- full pipeline ────────────────────────────────────────────────────
+// -- ingest -- full pipeline ----------------------------------------------------
 
 AnalyzeResult Ingestor::ingest(const fs::path& archivePath, ProgressFn progress)
 {
@@ -570,7 +666,7 @@ AnalyzeResult Ingestor::ingest(const fs::path& archivePath, ProgressFn progress)
     return result;
 }
 
-// ── ingestFolder -- for pre-extracted CD/ISO games ─────────────────────────────
+// -- ingestFolder -- for pre-extracted CD/ISO games -----------------------------
 
 AnalyzeResult Ingestor::ingestFolder(const fs::path& folderPath)
 {
@@ -633,8 +729,10 @@ AnalyzeResult Ingestor::ingestFolder(const fs::path& folderPath)
                 if (entry) slug = noYear;
             }
         }
-        // Note: ISO scanning removed -- Mode 2/XA ISOs cannot be read by 7za.
-        // Add manual entries to games.json for ISO-only games (e.g. wc3hott).
+        // Match 4: fuzzy title match using folder name
+        if (!entry) {
+            entry = m_db->byTitle(folderName);
+        }
     }
 
     if (entry) {
