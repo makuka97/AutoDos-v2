@@ -449,9 +449,11 @@ AnalyzeResult Ingestor::analyze(const fs::path& archivePath) const
 
     if (m_db) {
         // Match 1: exe filename
+        // Skip exe stems shorter than 3 chars -- too ambiguous (e.g. SC.EXE, OP.EXE)
         for (const auto& exeName : exeNames) {
             std::string stemLo = toLower(exeName.substr(0, exeName.rfind('.')));
             if (isBlacklisted(stemLo)) continue;
+            if (stemLo.size() < 3) continue;
             const GameEntry* entry = m_db->byExe(exeName);
             if (entry) {
                 result.success      = true;
@@ -766,9 +768,11 @@ AnalyzeResult Ingestor::ingestFolder(const fs::path& folderPath)
 
     if (m_db) {
         // 1. EXE match from files on disk
+        // Skip exe stems shorter than 3 chars -- too ambiguous (e.g. SC.EXE)
         for (auto& exeName : exeNames) {
             std::string s = toLower(exeName.substr(0, exeName.rfind('.')));
             if (isBlacklisted(s)) continue;
+            if (s.size() < 3) continue;
             entry = m_db->byExe(exeName);
             if (entry) break;
         }
