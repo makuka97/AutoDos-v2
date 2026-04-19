@@ -399,6 +399,16 @@ AnalyzeResult Ingestor::analyze(const fs::path& archivePath) const
         return result;
     }
 
+    // Detect ScummVM packages -- these need ScummVM, not DOSBox
+    for (auto& exe : exeNames) {
+        if (toLower(exe) == "scummvm.exe") {
+            result.error = "This game uses ScummVM and cannot run in DOSBox.
+
+AutoDOS2 supports DOSBox games only.";
+            return result;
+        }
+    }
+
     if (m_db) {
         // Match 1: exe filename
         for (const auto& exeName : exeNames) {
@@ -568,8 +578,11 @@ bool Ingestor::writeDosboxConf(const fs::path& extractedDir,
     // Mount dir for C:
     std::string mountDir = extractedDir.string();
 
-    if (!result.cdMount) {
-        // Non-CD game: find exe on disk, mount its parent
+    // Always search for exe on disk to find the correct mount dir.
+    // For cd_mount games with no ISOs (floppy/disk versions), the exe
+    // is on the filesystem just like a non-CD game.
+    // Only skip this for cd_mount games that actually have ISOs.
+    if (isoFiles.empty()) {
         std::error_code ec;
         std::string exeUp = toUpper(exeName);
         bool found = false;
@@ -603,12 +616,11 @@ bool Ingestor::writeDosboxConf(const fs::path& extractedDir,
     }
 
     if (result.cdMount && !isoFiles.empty()) {
+        // CD game with ISOs -- exe is on the disc
         autoexec << "D:\r\n";
         if (!exeName.empty()) autoexec << exeName << "\r\n";
-    } else if (result.cdMount && isoFiles.empty()) {
-        autoexec << "C:\r\n";
-        if (!exeName.empty()) autoexec << exeName << "\r\n";
     } else {
+        // Disk game OR cd_mount game with no ISOs (floppy version) -- exe on C:
         autoexec << "C:\r\n";
         if (!exeName.empty()) autoexec << exeName << "\r\n";
     }
