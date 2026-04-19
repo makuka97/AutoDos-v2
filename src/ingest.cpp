@@ -573,14 +573,14 @@ bool Ingestor::writeDosboxConf(const fs::path& extractedDir,
     autoexec << "exit\r\n";
 
     std::ostringstream conf;
-    conf << "[sdl]\r\nfullscreen=true\r\nfullresolution=desktop\r\noutput=openglnb\r\n\r\n";
+    conf << "[sdl]\r\nfullscreen=true\r\nfullresolution=desktop\r\noutput=opengl\r\n\r\n";
     conf << "[dosbox]\r\nmachine=svga_s3\r\nmemsize=" << memsize << "\r\n\r\n";
-    conf << "[cpu]\r\ncore=auto\r\ncputype=auto\r\ncycles=" << cycles << "\r\n";
+    conf << "[cpu]\r\ncore=auto\r\ncputype=auto\r\ncpu_cycles=" << cycles << "\r\n";
     conf << "cycleup=500\r\ncycledown=20\r\n\r\n";
     conf << "[dos]\r\nems=" << (result.ems ? "true" : "false") << "\r\n";
     conf << "xms=" << (result.xms ? "true" : "false") << "\r\n\r\n";
     conf << "[mixer]\r\nrate=44100\r\nblocksize=1024\r\nprebuffer=20\r\n\r\n";
-    conf << "[render]\r\nframeskip=0\r\naspect=true\r\n\r\n";
+    conf << "[render]\r\naspect=true\r\n\r\n";
     conf << "[autoexec]\r\n" << autoexec.str() << "\r\n";
 
     std::ofstream out(confPath);
@@ -801,14 +801,14 @@ AnalyzeResult Ingestor::ingestFolder(const fs::path& folderPath)
         }
 
         std::ostringstream conf;
-        conf << "[sdl]\r\nfullscreen=true\r\nfullresolution=desktop\r\noutput=openglnb\r\n\r\n";
+        conf << "[sdl]\r\nfullscreen=true\r\nfullresolution=desktop\r\noutput=opengl\r\n\r\n";
         conf << "[dosbox]\r\nmachine=svga_s3\r\nmemsize=" << memsize << "\r\n\r\n";
-        conf << "[cpu]\r\ncore=auto\r\ncputype=auto\r\ncycles=" << cycles << "\r\n";
+        conf << "[cpu]\r\ncore=auto\r\ncputype=auto\r\ncpu_cycles=" << cycles << "\r\n";
         conf << "cycleup=500\r\ncycledown=20\r\n\r\n";
         conf << "[dos]\r\nems=" << (result.ems?"true":"false") << "\r\n";
         conf << "xms=" << (result.xms?"true":"false") << "\r\n\r\n";
         conf << "[mixer]\r\nrate=44100\r\nblocksize=1024\r\nprebuffer=20\r\n\r\n";
-        conf << "[render]\r\nframeskip=0\r\naspect=true\r\n\r\n";
+        conf << "[render]\r\naspect=true\r\n\r\n";
         conf << "[autoexec]\r\n" << autoexec.str() << "\r\n";
 
         fs::create_directories(m_confsRoot, ec);
