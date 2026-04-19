@@ -554,7 +554,19 @@ bool Ingestor::writeDosboxConf(const fs::path& extractedDir,
             autoexec << "C:\r\n";
             autoexec << exeName << "\r\n";
         } else {
-            // Exe is on the CD (D:) — common for ISO-only games
+        if (exeOnDisk) {
+            // Exe is on the filesystem (C:)
+            autoexec << "C:\r\n";
+            autoexec << exeName << "\r\n";
+        } else {
+            // Exe is on the CD (D:)
+            autoexec << "D:\r\n";
+            // Use exeName if found by ISO scan, else fall back to result.exe
+            std::string launchExe = exeName.empty() ? result.exe : exeName;
+            size_t sl = launchExe.find_last_of("/\\");
+            if (sl != std::string::npos) launchExe = launchExe.substr(sl+1);
+            if (!launchExe.empty()) autoexec << launchExe << "\r\n";
+        }
             autoexec << "D:\r\n";
             autoexec << exeName << "\r\n";
         }
@@ -786,19 +798,22 @@ AnalyzeResult Ingestor::ingestFolder(const fs::path& folderPath)
         }
 
 
-        // If no exe on disk but ISOs present, the exe lives on the disc (D:)
-        if (exeName.empty() && !isoFiles.empty()) {
+
+        // Launch from D: if no exe on disk (exe lives on CD)
+        if (!isoFiles.empty() && exeName.empty()) {
             autoexec << "D:\r\n";
-            if (!result.exe.empty()) {
-                std::string dbExe = result.exe;
-                size_t sl = dbExe.find_last_of("/\\");
-                if (sl != std::string::npos) dbExe = dbExe.substr(sl+1);
-                autoexec << dbExe << "\r\n";
-            }
+            std::string launchExe = result.exe;
+            size_t sl = launchExe.find_last_of("/\\");
+            if (sl != std::string::npos) launchExe = launchExe.substr(sl+1);
+            if (!launchExe.empty()) autoexec << launchExe << "\r\n";
+        } else if (!isoFiles.empty() && !exeName.empty()) {
+            autoexec << "D:\r\n";
+            autoexec << exeName << "\r\n";
         } else {
             autoexec << "C:\r\n";
             if (!exeName.empty()) autoexec << exeName << "\r\n";
         }
+
 
         std::ostringstream conf;
         conf << "[sdl]\r\nfullscreen=true\r\nfullresolution=desktop\r\noutput=opengl\r\n\r\n";
