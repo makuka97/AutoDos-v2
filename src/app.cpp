@@ -65,13 +65,13 @@ static void applyAutoDOSTheme()
     c[ImGuiCol_ScrollbarGrabHovered] = {0.314f, 0.784f, 0.471f, 0.5f};
     c[ImGuiCol_CheckMark]            = ACCENT;
     c[ImGuiCol_Button]               = {0.125f, 0.204f, 0.157f, 1.00f};
-    c[ImGuiCol_ButtonHovered]        = {0.200f, 0.322f, 0.247f, 1.00f};
-    c[ImGuiCol_ButtonActive]         = ACCENT;
+    c[ImGuiCol_ButtonHovered]        = {0.280f, 0.480f, 0.340f, 1.00f};
+    c[ImGuiCol_ButtonActive]         = {0.400f, 0.900f, 0.550f, 1.00f};
     c[ImGuiCol_Header]               = {0.125f, 0.204f, 0.157f, 0.6f};
     c[ImGuiCol_HeaderHovered]        = {0.200f, 0.322f, 0.247f, 1.00f};
     c[ImGuiCol_HeaderActive]         = ACCENT;
-    c[ImGuiCol_Text]                 = {0.880f, 0.880f, 0.880f, 1.00f};
-    c[ImGuiCol_TextDisabled]         = {0.420f, 0.420f, 0.460f, 1.00f};
+    c[ImGuiCol_Text]                 = {1.000f, 1.000f, 1.000f, 1.00f};
+    c[ImGuiCol_TextDisabled]         = {0.600f, 0.600f, 0.640f, 1.00f};
     c[ImGuiCol_Separator]            = {0.180f, 0.180f, 0.220f, 1.00f};
     c[ImGuiCol_Tab]                  = {0.100f, 0.100f, 0.129f, 1.00f};
     c[ImGuiCol_TabHovered]           = {0.200f, 0.322f, 0.247f, 1.00f};
@@ -651,7 +651,7 @@ void App::renderGrid()
         ImFont* font = ImGui::GetFont();
         float fontSize = 15.0f;
         ImVec2 tp = {pos.x+8.0f, pos.y+imgH+(lblH-fontSize)*0.3f};
-        dl->AddText(font, fontSize, tp, IM_COL32(240,240,240,255),
+        dl->AddText(font, fontSize, tp, IM_COL32(255,255,255,255),
             g.title.c_str(), nullptr, CARD_W-10.0f);
 
         if (sel)
@@ -697,8 +697,8 @@ void App::renderBottomBar(float winW)
 
     // Launch — green
     ImGui::PushStyleColor(ImGuiCol_Button,       IM_COL32(28,68,42,255));
-    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, IM_COL32(48,108,68,255));
-    ImGui::PushStyleColor(ImGuiCol_ButtonActive,  IM_COL32(80,200,120,255));
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, IM_COL32(60,160,90,255));
+    ImGui::PushStyleColor(ImGuiCol_ButtonActive,  IM_COL32(100,220,140,255));
     if (!hasSel) ImGui::BeginDisabled();
     if (ImGui::Button("  Launch  ")) { if(sel) launchGame(*sel); }
     if (!hasSel) ImGui::EndDisabled();
@@ -719,8 +719,8 @@ void App::renderBottomBar(float winW)
 
     ImGui::SameLine(0,8);
     ImGui::PushStyleColor(ImGuiCol_Button,       IM_COL32(68,28,28,255));
-    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, IM_COL32(108,48,48,255));
-    ImGui::PushStyleColor(ImGuiCol_ButtonActive,  IM_COL32(200,80,80,255));
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, IM_COL32(160,60,60,255));
+    ImGui::PushStyleColor(ImGuiCol_ButtonActive,  IM_COL32(220,100,100,255));
     if (!hasSel) ImGui::BeginDisabled();
     if (ImGui::Button("  Delete  ")) {
         if (sel) { m_db.remove(sel->id); m_selected=-1; refreshLibrary(); }
