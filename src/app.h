@@ -17,8 +17,8 @@ namespace AutoDOS2 {
 
 constexpr int   WINDOW_W   = 900;
 constexpr int   WINDOW_H   = 700;
-constexpr float CARD_W     = 180.0f;
-constexpr float CARD_H     = 240.0f;
+constexpr float CARD_W     = 190.0f;
+constexpr float CARD_H     = 250.0f;
 constexpr float CARD_PAD   = 12.0f;
 
 // ── CoverCache ────────────────────────────────────────────────────────────────
