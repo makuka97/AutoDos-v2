@@ -114,6 +114,7 @@ private:
                             const std::filesystem::path& outDir) const;
 
     struct ExeCandidate { std::string relPath; std::string name; float score; };
+    std::string scanIsoForExe(const std::string& isoPath) const;
     std::vector<ExeCandidate> scanExtractedDir(
         const std::filesystem::path& dir, const std::string& archiveStem) const;
 };
