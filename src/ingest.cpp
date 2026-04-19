@@ -227,14 +227,17 @@ const GameEntry* GameDatabase::byTitle(const std::string& archiveName) const
         }
 
         // Method 2: slug containment -- works for concatenated names like commandandconquer
-        // Require title slug >= 80% of archive slug length to prevent short titles
-        // matching inside longer unrelated slugs (e.g. "Shock" inside "systemshock")
+        // Both directions require an 80% length ratio to prevent partial matches:
+        //   "magiccarpet" must not match "magiccarpetplus" (73% ratio, blocked)
+        //   "shock" must not match "systemshock" (50% ratio, blocked)
         std::string titleSlug = normalizeSlug(entry.title);
         if (!titleSlug.empty() && !archiveSlug.empty()) {
-            float lenRatio = (float)titleSlug.size() / (float)archiveSlug.size();
             bool titleInArchive = archiveSlug.find(titleSlug) != std::string::npos;
             bool archiveInTitle = titleSlug.find(archiveSlug) != std::string::npos;
-            if ((titleInArchive && lenRatio >= 0.80f) || archiveInTitle) {
+            float fwdRatio = (float)titleSlug.size() / (float)archiveSlug.size();
+            float revRatio = (float)archiveSlug.size() / (float)titleSlug.size();
+            if ((titleInArchive && fwdRatio >= 0.80f) ||
+                (archiveInTitle && revRatio >= 0.80f)) {
                 score = std::max(score, 0.85f);
             }
         }
