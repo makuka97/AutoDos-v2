@@ -156,12 +156,13 @@ bool App::init()
     io2.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
     io2.IniFilename  = nullptr;
 
-    // Load default font at larger size for readability
+    // Load default font — bigger, bolder, cleaner
     ImFontConfig fontCfg;
-    fontCfg.SizePixels    = 15.0f;
-    fontCfg.OversampleH   = 2;
-    fontCfg.OversampleV   = 2;
-    fontCfg.PixelSnapH    = true;
+    fontCfg.SizePixels    = 17.0f;
+    fontCfg.OversampleH   = 3;
+    fontCfg.OversampleV   = 3;
+    fontCfg.PixelSnapH    = false;
+    fontCfg.GlyphExtraSpacing.x = 0.5f;
     io2.Fonts->AddFontDefault(&fontCfg);
     io2.Fonts->Build();
 
@@ -646,10 +647,12 @@ void App::renderGrid()
             IM_COL32(0,0,0,0),IM_COL32(0,0,0,0),
             IM_COL32(0,0,0,230),IM_COL32(0,0,0,230));
 
-        // Title
-        ImVec2 tp = {pos.x+8.0f, pos.y+imgH+(lblH-14.0f)*0.3f};
-        dl->AddText(nullptr,0,tp,IM_COL32(230,230,230,255),
-            g.title.c_str(),nullptr,CARD_W-10.0f);
+        // Title — use larger font size for card labels
+        ImFont* font = ImGui::GetFont();
+        float fontSize = 15.0f;
+        ImVec2 tp = {pos.x+8.0f, pos.y+imgH+(lblH-fontSize)*0.3f};
+        dl->AddText(font, fontSize, tp, IM_COL32(240,240,240,255),
+            g.title.c_str(), nullptr, CARD_W-10.0f);
 
         if (sel)
             dl->AddRect(pos,{pos.x+CARD_W,pos.y+CARD_H},ACCENT32,10.0f,0,2.5f);
