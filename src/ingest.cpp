@@ -435,10 +435,6 @@ std::string Ingestor::scanIsoForExe(const std::string& isoPath) const
 }
 
 // ── writeDosboxConf ───────────────────────────────────────────────────────────
-//
-// Simple bulletproof logic:
-//   cd_mount=true  → exe is on D: (the ISO), trust games.json exe field
-//   cd_mount=false → find exe on disk, mount its parent as C:
 
 bool Ingestor::writeDosboxConf(const fs::path& extractedDir,
                                const AnalyzeResult& result) const
@@ -447,25 +443,25 @@ bool Ingestor::writeDosboxConf(const fs::path& extractedDir,
     fs::create_directories(m_confsRoot);
 
     fs::path confPath = m_confsRoot / (result.slug + ".conf");
-    if (fs::exists(confPath)) return true;  // preserve existing conf
+    if (fs::exists(confPath)) return true;
 
-    std::string cycles  = result.cycles.empty() ? "max limit 80000" : result.cycles;
-    int         memsize = result.memsize > 0 ? result.memsize : 16;
-
-    // Exe name — strip any path prefix, use DB value
+    // Exe name only (strip path prefix)
     std::string exeName = result.exe;
     {
         size_t sl = exeName.find_last_of("/\\");
         if (sl != std::string::npos) exeName = exeName.substr(sl + 1);
     }
 
-    // ── Find all ISOs ─────────────────────────────────────────────────────────
+    // ── Find all ISO/CUE/MDF images in extracted dir ─────────────────────────
+    // Skip bundled emulator subfolders (dosbox, dosbox-x) and pre-mounted
+    // C: drive subfolders (DOSBox-X style zips with a C\ subfolder)
     std::vector<std::string> isoFiles;
     {
         std::error_code ec;
         for (auto& f : fs::recursive_directory_iterator(extractedDir, ec)) {
             if (!f.is_regular_file(ec)) continue;
-            // Skip bundled emulator folders
+            // Skip files inside bundled emulator folders
+            std::string pathStr = toLower(f.path().string());
             bool skip = false;
             for (auto& seg : f.path()) {
                 std::string s = toLower(seg.string());
@@ -480,13 +476,9 @@ bool Ingestor::writeDosboxConf(const fs::path& extractedDir,
         std::sort(isoFiles.begin(), isoFiles.end());
     }
 
-    // ── Determine mount dir for C: ────────────────────────────────────────────
-    // For CD games: mount the extracted dir root as C: (for saves)
-    // For disk games: mount the directory containing the exe as C:
+    // ── Find exe location on disk ─────────────────────────────────────────────
     std::string mountDir = extractedDir.string();
-
-    if (!result.cdMount) {
-        // Find exe on disk and mount its parent
+    {
         std::error_code ec;
         std::string exeUp = toUpper(exeName);
         bool found = false;
@@ -500,49 +492,102 @@ bool Ingestor::writeDosboxConf(const fs::path& extractedDir,
             }
         }
 
-        // Fallback: use best scored exe if DB exe not found on disk
         if (!found) {
-            auto candidates = scanExtractedDir(extractedDir, result.slug);
-            if (!candidates.empty()) {
-                fs::path bestExe = extractedDir / candidates[0].relPath;
-                exeName  = candidates[0].name;
-                mountDir = bestExe.parent_path().string();
+            // Try scanning inside ISOs first (exe lives on disc)
+            bool foundInIso = false;
+            if (!isoFiles.empty()) {
+                std::string isoExe = scanIsoForExe(isoFiles[0]);
+                if (!isoExe.empty()) {
+                    // Also try to match against DB
+                    if (m_db) {
+                        const GameEntry* e = m_db->byExe(isoExe);
+                        if (e) {
+                            // Update result with correct DB entry
+                            exeName = isoExe;
+                            foundInIso = true;
+                        }
+                    }
+                    if (!foundInIso) {
+                        exeName = isoExe;
+                        foundInIso = true;
+                    }
+                }
+            }
+            // Fall back to scanning filesystem
+            if (!foundInIso) {
+                auto candidates = scanExtractedDir(extractedDir, result.slug);
+                if (!candidates.empty()) {
+                    fs::path bestExe = extractedDir / candidates[0].relPath;
+                    exeName  = candidates[0].name;
+                    mountDir = bestExe.parent_path().string();
+                }
             }
         }
     }
 
-    // ── Build autoexec ────────────────────────────────────────────────────────
+    std::string cycles  = result.cycles.empty() ? "max limit 80000" : result.cycles;
+    int         memsize = result.memsize > 0 ? result.memsize : 16;
+
     std::ostringstream autoexec;
     autoexec << "@echo off\r\n";
-    autoexec << "mount C \"" << mountDir << "\"\r\n";
 
-    if (!isoFiles.empty()) {
-        autoexec << "imgmount D";
-        for (auto& iso : isoFiles) autoexec << " \"" << iso << "\"";
-        autoexec << " -t iso\r\n";
+    // Check if exe actually exists on disk (not inside an ISO)
+    bool exeOnDisk = false;
+    if (!exeName.empty()) {
+        std::error_code ec2;
+        std::string exeUp = toUpper(exeName);
+        for (auto& f : fs::recursive_directory_iterator(extractedDir, ec2)) {
+            if (!f.is_regular_file(ec2)) continue;
+            if (toUpper(f.path().filename().string()) == exeUp) { exeOnDisk = true; break; }
+        }
     }
 
     if (result.cdMount && !isoFiles.empty()) {
-        // Exe is on the CD — switch to D: and run
-        autoexec << "D:\r\n";
-        if (!exeName.empty()) autoexec << exeName << "\r\n";
+        // ── CD-based game ─────────────────────────────────────────────────────
+        autoexec << "mount C \"" << mountDir << "\"\r\n";
+        autoexec << "imgmount D";
+        for (auto& iso : isoFiles) autoexec << " \"" << iso << "\"";
+        autoexec << " -t iso\r\n";
+
+        if (exeOnDisk) {
+            // Exe is on the filesystem (C:)
+            autoexec << "C:\r\n";
+            autoexec << exeName << "\r\n";
+        } else {
+        if (exeOnDisk) {
+            // Exe is on the filesystem (C:)
+            autoexec << "C:\r\n";
+            autoexec << exeName << "\r\n";
+        } else {
+            // Exe is on the CD (D:)
+            autoexec << "D:\r\n";
+            // Use exeName if found by ISO scan, else fall back to result.exe
+            std::string launchExe = exeName.empty() ? result.exe : exeName;
+            size_t sl = launchExe.find_last_of("/\\");
+            if (sl != std::string::npos) launchExe = launchExe.substr(sl+1);
+            if (!launchExe.empty()) autoexec << launchExe << "\r\n";
+        }
+            autoexec << "D:\r\n";
+            autoexec << exeName << "\r\n";
+        }
     } else if (result.cdMount && isoFiles.empty()) {
-        // cd_mount but no ISO found — exe is on C: (CD audio only game)
+        // cd_mount=true but no ISO — exe is on C:, CD just for music
+        autoexec << "mount C \"" << mountDir << "\"\r\n";
         autoexec << "C:\r\n";
-        if (!exeName.empty()) autoexec << exeName << "\r\n";
+        autoexec << exeName << "\r\n";
     } else {
-        // Standard disk game — exe on C:
+        // Standard non-CD game
+        autoexec << "mount C \"" << mountDir << "\"\r\n";
         autoexec << "C:\r\n";
-        if (!exeName.empty()) autoexec << exeName << "\r\n";
+        autoexec << exeName << "\r\n";
     }
 
     autoexec << "exit\r\n";
 
-    // ── Write conf ────────────────────────────────────────────────────────────
     std::ostringstream conf;
     conf << "[sdl]\r\nfullscreen=true\r\nfullresolution=desktop\r\noutput=opengl\r\n\r\n";
     conf << "[dosbox]\r\nmachine=svga_s3\r\nmemsize=" << memsize << "\r\n\r\n";
-    conf << "[cpu]\r\ncore=auto\r\ncputype=auto\r\ncpu_cycles=" << cycles << "\r\n";
+    conf << "[cpu]\r\ncore=auto\r\ncputype=auto\r\ncycles=" << cycles << "\r\n";
     conf << "cycleup=500\r\ncycledown=20\r\n\r\n";
     conf << "[dos]\r\nems=" << (result.ems ? "true" : "false") << "\r\n";
     conf << "xms=" << (result.xms ? "true" : "false") << "\r\n\r\n";
@@ -555,7 +600,6 @@ bool Ingestor::writeDosboxConf(const fs::path& extractedDir,
     out << conf.str();
     return true;
 }
-
 // ── ingest — full pipeline ────────────────────────────────────────────────────
 
 AnalyzeResult Ingestor::ingest(const fs::path& archivePath, ProgressFn progress)
@@ -596,9 +640,6 @@ AnalyzeResult Ingestor::ingest(const fs::path& archivePath, ProgressFn progress)
 }
 
 // ── ingestFolder — for pre-extracted CD/ISO games ─────────────────────────────
-//
-// User unzipped the game themselves and points us at the folder.
-// We scan for ISOs/EXEs, match games.json, write conf — no extraction needed.
 
 AnalyzeResult Ingestor::ingestFolder(const fs::path& folderPath)
 {
@@ -612,21 +653,19 @@ AnalyzeResult Ingestor::ingestFolder(const fs::path& folderPath)
     std::string folderName = folderPath.filename().string();
     std::string slug       = slugify(folderName);
 
-    // ── Collect EXEs and ISOs ─────────────────────────────────────────────────
+    // Collect EXEs and ISOs recursively
     std::vector<std::string> exeNames;
     std::vector<std::string> isoFiles;
     std::error_code ec;
 
     for (auto& f : fs::recursive_directory_iterator(folderPath, ec)) {
         if (!f.is_regular_file(ec)) continue;
+        std::string ext  = toUpper(f.path().extension().string());
         bool skip = false;
-        for (auto& seg : f.path()) {
-            std::string s = toLower(seg.string());
-            if (s == "dosbox" || s == "dosbox-x" || s == "dosboxx")
+        for (auto& seg : f.path())
+            if (toLower(seg.string()) == "dosbox" || toLower(seg.string()) == "dosbox-x")
                 { skip = true; break; }
-        }
         if (skip) continue;
-        std::string ext = toUpper(f.path().extension().string());
         if (ext == ".EXE" || ext == ".COM" || ext == ".BAT")
             exeNames.push_back(toUpper(f.path().filename().string()));
         else if (ext == ".ISO" || ext == ".CUE" || ext == ".MDF")
@@ -634,87 +673,55 @@ AnalyzeResult Ingestor::ingestFolder(const fs::path& folderPath)
     }
     std::sort(isoFiles.begin(), isoFiles.end());
 
-    // ── Match against games.json ──────────────────────────────────────────────
+    // Match against games.json
     const GameEntry* entry = nullptr;
-
     if (m_db) {
-        // 1. Try matching EXEs found on disk
+        // Try exe match
         for (auto& exeName : exeNames) {
             std::string s = toLower(exeName.substr(0, exeName.rfind('.')));
             if (isBlacklisted(s)) continue;
             entry = m_db->byExe(exeName);
             if (entry) break;
         }
-
-        // 2. Try slug match (folder name → games.json key)
+        // Try slug match
         if (!entry) entry = m_db->bySlug(slug);
-
-        // 3. Try stripping trailing year e.g. wc3hott1994 → wc3hott
-        if (!entry && slug.size() > 4) {
-            bool allDigits = true;
-            for (int i = 1; i <= 4; i++)
-                if (!std::isdigit((unsigned char)slug[slug.size()-i]))
-                    { allDigits = false; break; }
-            if (allDigits) {
-                std::string noYear = slug.substr(0, slug.size() - 4);
-                entry = m_db->bySlug(noYear);
-                if (entry) slug = noYear;
-            }
+        // Try stripping year
+        if (!entry && slug.size() > 4 && slug.back() >= '0' && slug.back() <= '9') {
+            std::string noYear = slug.substr(0, slug.size() - 4);
+            entry = m_db->bySlug(noYear);
+            if (entry) slug = noYear;
         }
+        // Try scanning inside first ISO for exe names
+        // ISO scanner removed — Mode 2/XA ISOs (common for 90s CD games)
+        // cannot be read by 7za. Trust games.json exe field for CD games.
 
-        // 4. Scan inside first ISO for exe names (for ISO-only games)
-        if (!entry && !isoFiles.empty()) {
-            std::string listing = run7za("l \"" + isoFiles[0] + "\"");
-            std::istringstream ss(listing);
-            std::string line;
-            while (std::getline(ss, line)) {
-                if (line.size() < 4) continue;
-                std::string up = toUpper(line);
-                std::string ext3 = up.size() >= 3 ? up.substr(up.size()-3) : "";
-                if (ext3 != "EXE" && ext3 != "COM") continue;
-                size_t sp = line.rfind(' ');
-                std::string fname = (sp != std::string::npos) ? line.substr(sp+1) : line;
-                size_t sl2 = fname.find_last_of("/\\");
-                std::string name = (sl2 != std::string::npos) ? fname.substr(sl2+1) : fname;
-                name = toUpper(name);
-                if (name.empty()) continue;
-                std::string stem = toLower(name.size() > 4 ? name.substr(0, name.rfind('.')) : name);
-                if (isBlacklisted(stem)) continue;
-                entry = m_db->byExe(name);
-                if (entry) break;
-            }
-        }
-    }
-
-    // ── Build result from matched entry or folder name ────────────────────────
     if (entry) {
-        result.slug         = entry->slug;
-        result.title        = entry->title;
-        result.exe          = entry->exe;
-        result.workDir      = entry->workDir;
-        result.cycles       = entry->cycles;
-        result.memsize      = entry->memsize;
-        result.ems          = entry->ems;
-        result.xms          = entry->xms;
-        result.cdMount      = entry->cdMount;
-        result.installFirst = entry->installFirst;
-        result.source       = "matched";
-        result.confidence   = 1.0f;
+        result.slug        = entry->slug;
+        result.title       = entry->title;
+        result.exe         = entry->exe;
+        result.workDir     = entry->workDir;
+        result.cycles      = entry->cycles;
+        result.memsize     = entry->memsize;
+        result.ems         = entry->ems;
+        result.xms         = entry->xms;
+        result.cdMount     = entry->cdMount;
+        result.installFirst= entry->installFirst;
+        result.source      = "matched";
+        result.confidence  = 1.0f;
     } else {
         result.slug       = slug;
         result.title      = folderName;
-        result.source     = "unmatched";
-        result.confidence = 0.0f;
+        result.source     = "scored";
+        result.confidence = 0.5f;
         result.cdMount    = !isoFiles.empty();
-        // Best scored exe from filesystem
-        auto candidates = scanExtractedDir(folderPath, folderName);
+        auto candidates   = scanExtractedDir(folderPath, folderName);
         if (!candidates.empty()) result.exe = candidates[0].name;
     }
 
     result.gameType = isoFiles.empty() ? "SIMPLE" : "CD_BASED";
     result.success  = true;
 
-    // ── Create stub folder so conf/art pipeline works ─────────────────────────
+    // Create stub folder
     fs::path extractDir = m_extractRoot / result.slug;
     if (!fs::exists(extractDir)) {
         fs::create_directories(extractDir, ec);
@@ -722,23 +729,19 @@ AnalyzeResult Ingestor::ingestFolder(const fs::path& folderPath)
         marker << folderPath.string();
     }
 
-    // ── Write conf pointing at original folder ────────────────────────────────
+    // Write conf pointing at original folder
     fs::path confPath = m_confsRoot / (result.slug + ".conf");
     if (!fs::exists(confPath)) {
-        std::string exeName = result.exe;
+        std::string mountDir = folderPath.string();
+        std::string exeName  = result.exe;
         {
             size_t sl = exeName.find_last_of("/\\");
             if (sl != std::string::npos) exeName = exeName.substr(sl+1);
         }
 
-        std::string cycles  = result.cycles.empty() ? "max limit 80000" : result.cycles;
-        int         memsize = result.memsize > 0 ? result.memsize : 16;
-
-        // Mount dir for C: — for CD games use folder root, for disk games find exe dir
-        std::string mountDir = folderPath.string();
+        // Find exe on disk to get correct mount dir
         bool exeOnDisk = false;
-
-        if (!result.cdMount && !exeName.empty()) {
+        if (!exeName.empty()) {
             std::string exeUp = toUpper(exeName);
             for (auto& f : fs::recursive_directory_iterator(folderPath, ec)) {
                 if (!f.is_regular_file(ec)) continue;
@@ -748,17 +751,11 @@ AnalyzeResult Ingestor::ingestFolder(const fs::path& folderPath)
                     break;
                 }
             }
-            if (!exeOnDisk) {
-                auto candidates = scanExtractedDir(folderPath, result.slug);
-                if (!candidates.empty()) {
-                    fs::path bestExe = folderPath / candidates[0].relPath;
-                    exeName  = candidates[0].name;
-                    mountDir = bestExe.parent_path().string();
-                }
-            }
         }
 
-        // Build autoexec
+        std::string cycles  = result.cycles.empty() ? "max limit 80000" : result.cycles;
+        int         memsize = result.memsize > 0 ? result.memsize : 16;
+
         std::ostringstream autoexec;
         autoexec << "@echo off\r\n";
         autoexec << "mount C \"" << mountDir << "\"\r\n";
@@ -769,22 +766,20 @@ AnalyzeResult Ingestor::ingestFolder(const fs::path& folderPath)
             autoexec << " -t iso\r\n";
         }
 
-        if (result.cdMount && !isoFiles.empty()) {
-            // Exe on CD
+        if (!isoFiles.empty() && !exeOnDisk) {
+            // Exe is on the CD
             autoexec << "D:\r\n";
             if (!exeName.empty()) autoexec << exeName << "\r\n";
         } else {
-            // Exe on filesystem
             autoexec << "C:\r\n";
             if (!exeName.empty()) autoexec << exeName << "\r\n";
         }
         autoexec << "exit\r\n";
 
-        // Write conf
         std::ostringstream conf;
         conf << "[sdl]\r\nfullscreen=true\r\nfullresolution=desktop\r\noutput=opengl\r\n\r\n";
         conf << "[dosbox]\r\nmachine=svga_s3\r\nmemsize=" << memsize << "\r\n\r\n";
-        conf << "[cpu]\r\ncore=auto\r\ncputype=auto\r\ncpu_cycles=" << cycles << "\r\n";
+        conf << "[cpu]\r\ncore=auto\r\ncputype=auto\r\ncycles=" << cycles << "\r\n";
         conf << "cycleup=500\r\ncycledown=20\r\n\r\n";
         conf << "[dos]\r\nems=" << (result.ems ? "true" : "false") << "\r\n";
         conf << "xms=" << (result.xms ? "true" : "false") << "\r\n\r\n";
