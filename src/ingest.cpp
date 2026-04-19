@@ -177,29 +177,6 @@ static std::vector<std::string> extractWords(const std::string& s) {
     return words;
 }
 
-// Helper: normalize & -> and, then slugify (alphanumeric lowercase only)
-static std::string normalizeSlug(const std::string& s) {
-    std::string tmp;
-    for (char c : s) {
-        if (c == '&') { tmp += "and"; }
-        else if (std::isalnum((unsigned char)c)) tmp += std::tolower((unsigned char)c);
-    }
-    return tmp;
-}
-
-// Helper: strip common noise suffixes from a slug
-static std::string stripNoiseSuffix(std::string slug) {
-    static const std::vector<std::string> NOISE = {
-        "doswin","dosxp","dos","win","cd","hdd","gog","rip"
-    };
-    for (auto& sfx : NOISE) {
-        if (slug.size() > sfx.size() &&
-            slug.substr(slug.size() - sfx.size()) == sfx)
-            slug = slug.substr(0, slug.size() - sfx.size());
-    }
-    return slug;
-}
-
 const GameEntry* GameDatabase::byTitle(const std::string& archiveName) const
 {
     if (m_bySlug.empty()) return nullptr;
@@ -216,7 +193,7 @@ const GameEntry* GameDatabase::byTitle(const std::string& archiveName) const
 
         float score = 0.0f;
 
-        // Method 1: word overlap (works when archive name has spaces/separators)
+        // Method 1: word overlap -- works when archive name has separators
         std::vector<std::string> titleWords = extractWords(entry.title);
         if (!titleWords.empty() && !archiveWords.empty()) {
             int matches = 0;
@@ -227,12 +204,15 @@ const GameEntry* GameDatabase::byTitle(const std::string& archiveName) const
                 (float)matches / std::max(archiveWords.size(), titleWords.size()));
         }
 
-        // Method 2: slug containment (works for concatenated names like commandandconquer)
-        // Normalize & -> and in both before comparing
+        // Method 2: slug containment -- works for concatenated names like commandandconquer
+        // Require title slug >= 80% of archive slug length to prevent short titles
+        // matching inside longer unrelated slugs (e.g. "Shock" inside "systemshock")
         std::string titleSlug = normalizeSlug(entry.title);
         if (!titleSlug.empty() && !archiveSlug.empty()) {
-            if (archiveSlug.find(titleSlug) != std::string::npos ||
-                titleSlug.find(archiveSlug) != std::string::npos) {
+            float lenRatio = (float)titleSlug.size() / (float)archiveSlug.size();
+            bool titleInArchive = archiveSlug.find(titleSlug) != std::string::npos;
+            bool archiveInTitle = titleSlug.find(archiveSlug) != std::string::npos;
+            if ((titleInArchive && lenRatio >= 0.80f) || archiveInTitle) {
                 score = std::max(score, 0.85f);
             }
         }
