@@ -402,9 +402,7 @@ AnalyzeResult Ingestor::analyze(const fs::path& archivePath) const
     // Detect ScummVM packages -- these need ScummVM, not DOSBox
     for (auto& exe : exeNames) {
         if (toLower(exe) == "scummvm.exe") {
-            result.error = "This game uses ScummVM and cannot run in DOSBox.
-
-AutoDOS2 supports DOSBox games only.";
+            result.error = "This game uses ScummVM and cannot run in DOSBox. AutoDOS2 supports DOSBox games only.";
             return result;
         }
     }
