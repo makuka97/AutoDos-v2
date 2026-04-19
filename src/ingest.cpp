@@ -177,30 +177,65 @@ static std::vector<std::string> extractWords(const std::string& s) {
     return words;
 }
 
+// Helper: normalize & -> and, then slugify (alphanumeric lowercase only)
+static std::string normalizeSlug(const std::string& s) {
+    std::string tmp;
+    for (char c : s) {
+        if (c == '&') { tmp += "and"; }
+        else if (std::isalnum((unsigned char)c)) tmp += std::tolower((unsigned char)c);
+    }
+    return tmp;
+}
+
+// Helper: strip common noise suffixes from a slug
+static std::string stripNoiseSuffix(std::string slug) {
+    static const std::vector<std::string> NOISE = {
+        "doswin","dosxp","dos","win","cd","hdd","gog","rip"
+    };
+    for (auto& sfx : NOISE) {
+        if (slug.size() > sfx.size() &&
+            slug.substr(slug.size() - sfx.size()) == sfx)
+            slug = slug.substr(0, slug.size() - sfx.size());
+    }
+    return slug;
+}
+
 const GameEntry* GameDatabase::byTitle(const std::string& archiveName) const
 {
     if (m_bySlug.empty()) return nullptr;
 
+    // Build normalized archive slug: & -> and, alphanumeric only, strip noise
+    std::string archiveSlug = stripNoiseSuffix(normalizeSlug(archiveName));
     std::vector<std::string> archiveWords = extractWords(archiveName);
-    if (archiveWords.empty()) return nullptr;
 
     const GameEntry* bestEntry = nullptr;
     float bestScore = 0.0f;
-    const float MIN_SCORE = 0.60f; // at least 60% word overlap required
+    const float MIN_SCORE = 0.60f;
 
     for (auto& [slug, entry] : m_bySlug) {
+
+        float score = 0.0f;
+
+        // Method 1: word overlap (works when archive name has spaces/separators)
         std::vector<std::string> titleWords = extractWords(entry.title);
-        if (titleWords.empty()) continue;
+        if (!titleWords.empty() && !archiveWords.empty()) {
+            int matches = 0;
+            for (auto& aw : archiveWords)
+                for (auto& tw : titleWords)
+                    if (aw == tw) { matches++; break; }
+            score = std::max(score,
+                (float)matches / std::max(archiveWords.size(), titleWords.size()));
+        }
 
-        // Count words from archive that appear in title
-        int matches = 0;
-        for (auto& aw : archiveWords)
-            for (auto& tw : titleWords)
-                if (aw == tw) { matches++; break; }
-
-        // Score = matched words / max(archiveWords, titleWords)
-        // This penalises both missing words and extra words
-        float score = (float)matches / std::max(archiveWords.size(), titleWords.size());
+        // Method 2: slug containment (works for concatenated names like commandandconquer)
+        // Normalize & -> and in both before comparing
+        std::string titleSlug = normalizeSlug(entry.title);
+        if (!titleSlug.empty() && !archiveSlug.empty()) {
+            if (archiveSlug.find(titleSlug) != std::string::npos ||
+                titleSlug.find(archiveSlug) != std::string::npos) {
+                score = std::max(score, 0.85f);
+            }
+        }
 
         if (score > bestScore) {
             bestScore = score;
