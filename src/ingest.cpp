@@ -477,6 +477,15 @@ AnalyzeResult Ingestor::analyze(const fs::path& archivePath) const
         std::string slug        = slugify(archiveStem);
         const GameEntry* entry  = m_db->bySlug(slug);
 
+        // Try stripping noise suffixes: _dos_win, _dos, _win, etc.
+        if (!entry) {
+            std::string stripped = stripNoiseSuffix(slug);
+            if (stripped != slug) {
+                entry = m_db->bySlug(stripped);
+                if (entry) slug = stripped;
+            }
+        }
+
         // Try stripping trailing year
         if (!entry && slug.size() > 4) {
             bool hasYear = true;
