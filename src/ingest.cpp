@@ -50,7 +50,7 @@ static bool isBlacklisted(const std::string& stem) {
         "directx","dxsetup","vcredist","dotnet",
         "dos4gw","cwsdpmi","himemx","emm386",
         "fixsave","fix","convert","copy","move",
-        "dosbox","dosbox_staging","dosbox-x","dosboxx","scummvm","boxer","loadpats","intro","movie"
+        "dosbox","dosbox_staging","dosbox-x","dosboxx","scummvm","boxer","loadpats","intro","movie","logo","start","run"
     };
     std::string lo = toLower(stem);
     for (auto& b : BL) if (lo == b) return true;
@@ -225,14 +225,13 @@ Ingestor::scanExtractedDir(const fs::path& dir, const std::string& archiveStem) 
             std::string stem = toLower(entry.path().stem().string());
             if (isBlacklisted(stem)) continue;
 
-            float score = (ext == "EXE") ? 1.0f : (ext == "BAT") ? 0.7f : 0.6f;
+            float score = (ext == "EXE") ? 1.0f : (ext == "BAT") ? 0.8f : 0.6f;
             score -= depth * 0.15f;
             if (score < 0.01f) score = 0.01f;
 
             if (stem == stemLo || stem.find(stemLo) == 0 || stemLo.find(stem) == 0)
-                score += 0.3f;
-            if (stem == "game" || stem == "play" || stem == "start" ||
-                stem == "run"  || stem == "main" || stem == "go")
+                score += 0.5f;  // strong boost for slug match
+            if (stem == "game" || stem == "play" || stem == "main" || stem == "go")
                 score += 0.15f;
 
             fs::path rel = fs::relative(entry.path(), dir, ec);
