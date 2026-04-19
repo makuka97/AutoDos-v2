@@ -66,6 +66,10 @@ public:
     // Access all entries for fuzzy matching
     const std::unordered_map<std::string, GameEntry>& allEntries() const { return m_bySlug; }
 
+    // Fuzzy title match — returns best matching entry or nullptr
+    // Compares cleaned archive name against all game titles using word overlap
+    const GameEntry* byTitle(const std::string& archiveName) const;
+
 private:
     bool m_loaded = false;
     std::unordered_map<std::string, GameEntry>  m_bySlug;
