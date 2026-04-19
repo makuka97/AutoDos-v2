@@ -1,4 +1,6 @@
 #include "platform.h"
+#include <shobjidl.h>
+#include <shlobj.h>
 
 #include <SDL.h>
 #include <stdexcept>
@@ -73,19 +75,39 @@ std::filesystem::path openFileDialog(const std::string& filter_desc,
 std::filesystem::path AutoDOS2::openFolderDialog()
 {
 #ifdef _WIN32
-    BROWSEINFOA bi = {};
-    char buf[MAX_PATH] = {};
-    bi.lpszTitle  = "Select game folder";
-    bi.ulFlags    = BIF_RETURNONLYFSDIRS | BIF_NEWDIALOGSTYLE;
-    bi.pszDisplayName = buf;
+    // Use IFileOpenDialog — modern Windows Explorer style folder picker
+    // Must initialize COM first
+    HRESULT comInit = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE);
 
-    LPITEMIDLIST pidl = SHBrowseForFolderA(&bi);
-    if (!pidl) return {};
+    std::filesystem::path result;
+    IFileOpenDialog* pfd = nullptr;
+    HRESULT hr = CoCreateInstance(CLSID_FileOpenDialog, nullptr,
+        CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&pfd));
 
-    char path[MAX_PATH] = {};
-    SHGetPathFromIDListA(pidl, path);
-    CoTaskMemFree(pidl);
-    return std::filesystem::path(path);
+    if (SUCCEEDED(hr)) {
+        DWORD opts = 0;
+        pfd->GetOptions(&opts);
+        pfd->SetOptions(opts | FOS_PICKFOLDERS | FOS_FORCEFILESYSTEM | FOS_PATHMUSTEXIST);
+        pfd->SetTitle(L"Select game folder");
+        hr = pfd->Show(nullptr);
+        if (SUCCEEDED(hr)) {
+            IShellItem* psi = nullptr;
+            if (SUCCEEDED(pfd->GetResult(&psi))) {
+                PWSTR pszPath = nullptr;
+                if (SUCCEEDED(psi->GetDisplayName(SIGDN_FILESYSPATH, &pszPath))) {
+                    result = std::filesystem::path(pszPath);
+                    CoTaskMemFree(pszPath);
+                }
+                psi->Release();
+            }
+        }
+        pfd->Release();
+    }
+
+    if (SUCCEEDED(comInit) || comInit == S_FALSE)
+        CoUninitialize();
+
+    return result;
 #else
     return {};
 #endif
