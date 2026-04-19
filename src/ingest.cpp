@@ -696,9 +696,20 @@ AnalyzeResult Ingestor::ingestFolder(const fs::path& folderPath)
             autoexec << " -t iso\r\n";
         }
 
-        autoexec << "C:\r\n";
-        if (!exeName.empty()) autoexec << exeName << "\r\n";
-        autoexec << "exit\r\n";
+
+        // If no exe on disk but ISOs present, the exe lives on the disc (D:)
+        if (exeName.empty() && !isoFiles.empty()) {
+            autoexec << "D:\r\n";
+            if (!result.exe.empty()) {
+                std::string dbExe = result.exe;
+                size_t sl = dbExe.find_last_of("/\\");
+                if (sl != std::string::npos) dbExe = dbExe.substr(sl+1);
+                autoexec << dbExe << "\r\n";
+            }
+        } else {
+            autoexec << "C:\r\n";
+            if (!exeName.empty()) autoexec << exeName << "\r\n";
+        }
 
         std::ostringstream conf;
         conf << "[sdl]\r\nfullscreen=true\r\nfullresolution=desktop\r\noutput=openglnb\r\n\r\n";
