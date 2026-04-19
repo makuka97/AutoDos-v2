@@ -51,8 +51,8 @@ static void applyAutoDOSTheme()
     s.ChildBorderSize    = 0.0f;
 
     ImVec4* c = s.Colors;
-    c[ImGuiCol_WindowBg]             = {0.145f, 0.145f, 0.165f, 1.00f};
-    c[ImGuiCol_ChildBg]              = {0.160f, 0.160f, 0.185f, 1.00f};
+    c[ImGuiCol_WindowBg]             = {0.220f, 0.220f, 0.240f, 1.00f};
+    c[ImGuiCol_ChildBg]              = {0.230f, 0.230f, 0.250f, 1.00f};
     c[ImGuiCol_PopupBg]              = {0.110f, 0.110f, 0.141f, 0.97f};
     c[ImGuiCol_Border]               = {0.180f, 0.180f, 0.220f, 1.00f};
     c[ImGuiCol_FrameBg]              = {0.130f, 0.130f, 0.165f, 1.00f};
@@ -371,7 +371,7 @@ void App::update()
 
 void App::render()
 {
-    SDL_SetRenderDrawColor(m_renderer,38,38,48,255);
+    SDL_SetRenderDrawColor(m_renderer,56,56,68,255);
     SDL_RenderClear(m_renderer);
     ImGui_ImplSDLRenderer2_NewFrame();
     ImGui_ImplSDL2_NewFrame();
@@ -431,7 +431,7 @@ void App::renderImGui()
 
 void App::renderTopBar(float winW)
 {
-    ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4{0.120f,0.120f,0.145f,1.0f});
+    ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4{0.195f,0.195f,0.215f,1.0f});
     ImGui::BeginChild("##top",{0,52},false,ImGuiWindowFlags_NoScrollbar);
     ImGui::PopStyleColor();
 
@@ -506,7 +506,7 @@ void App::renderTopBar(float winW)
 void App::renderSidebar()
 {
     const float sideW = 200.0f;
-    ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4{0.130f,0.130f,0.155f,1.0f});
+    ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4{0.205f,0.205f,0.225f,1.0f});
     ImGui::BeginChild("##sidebar",{sideW,0},false,ImGuiWindowFlags_NoScrollbar);
     ImGui::PopStyleColor();
 
@@ -632,8 +632,8 @@ void App::renderGrid()
 
         ImU32 bg = sel
             ? IM_COL32(36,60,46,255)
-            : hov ? IM_COL32(52,58,68,255)
-                  : IM_COL32(42,44,56,255);
+            : hov ? IM_COL32(68,74,88,255)
+                  : IM_COL32(58,60,74,255);
         dl->AddRectFilled(pos,{pos.x+CARD_W,pos.y+CARD_H},bg,10.0f);
 
         SDL_Texture* tex = m_covers.get(g.cover_path);
