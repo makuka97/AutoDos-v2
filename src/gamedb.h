@@ -24,7 +24,10 @@ struct GameRecord {
     std::string cover_path;
     std::string added_at;       // ISO-8601 text, set by DB default
     std::string last_played;    // ISO-8601 text, empty until first play
-    int         play_count  = 0;
+    int         play_count   = 0;
+    float       confidence   = 0.0f;
+    std::string source;
+    int         needs_review = 0;
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
