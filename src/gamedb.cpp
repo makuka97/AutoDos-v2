@@ -6,7 +6,7 @@
 
 namespace AutoDOS2 {
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
+// -- Helpers -------------------------------------------------------------------
 
 static const char* colText(sqlite3_stmt* s, int col)
 {
@@ -14,7 +14,7 @@ static const char* colText(sqlite3_stmt* s, int col)
     return t ? reinterpret_cast<const char*>(t) : "";
 }
 
-// ── Destructor / close ────────────────────────────────────────────────────────
+// -- Destructor / close --------------------------------------------------------
 
 GameDB::~GameDB() { close(); }
 
@@ -26,7 +26,7 @@ void GameDB::close()
     }
 }
 
-// ── open ──────────────────────────────────────────────────────────────────────
+// -- open ----------------------------------------------------------------------
 
 bool GameDB::open(const std::filesystem::path& path)
 {
@@ -50,7 +50,7 @@ bool GameDB::open(const std::filesystem::path& path)
     return createSchema();
 }
 
-// ── createSchema ──────────────────────────────────────────────────────────────
+// -- createSchema --------------------------------------------------------------
 
 bool GameDB::createSchema()
 {
@@ -80,10 +80,21 @@ bool GameDB::createSchema()
         CREATE INDEX IF NOT EXISTS idx_saves_game ON saves(game_id);
     )";
     execSQL(saves_sql);
-    return execSQL(sql);
+    if (!execSQL(sql)) return false;
+
+    // Safe migration -- silently ignores "duplicate column" errors
+    auto migrate = [&](const char* msql) {
+        char* err = nullptr;
+        sqlite3_exec(m_db, msql, nullptr, nullptr, &err);
+        if (err) sqlite3_free(err);
+    };
+    migrate("ALTER TABLE games ADD COLUMN confidence   REAL    NOT NULL DEFAULT 0.0;");
+    migrate("ALTER TABLE games ADD COLUMN source       TEXT    NOT NULL DEFAULT '';");
+    migrate("ALTER TABLE games ADD COLUMN needs_review INTEGER NOT NULL DEFAULT 0;");
+    return true;
 }
 
-// ── execSQL ───────────────────────────────────────────────────────────────────
+// -- execSQL -------------------------------------------------------------------
 
 bool GameDB::execSQL(const char* sql)
 {
@@ -97,7 +108,7 @@ bool GameDB::execSQL(const char* sql)
     return true;
 }
 
-// ── rowToRecord ───────────────────────────────────────────────────────────────
+// -- rowToRecord ---------------------------------------------------------------
 
 GameRecord GameDB::rowToRecord(sqlite3_stmt* stmt)
 {
@@ -111,17 +122,21 @@ GameRecord GameDB::rowToRecord(sqlite3_stmt* stmt)
     r.cover_path  = colText(stmt, 6);
     r.added_at    = colText(stmt, 7);
     r.last_played = colText(stmt, 8);
-    r.play_count  = sqlite3_column_int (stmt, 9);
+    r.play_count   = sqlite3_column_int (stmt, 9);
+    r.confidence   = (float)sqlite3_column_double(stmt, 10);
+    r.source       = colText(stmt, 11);
+    r.needs_review = sqlite3_column_int(stmt, 12);
     return r;
 }
 
-// ── insert ────────────────────────────────────────────────────────────────────
+// -- insert --------------------------------------------------------------------
 
 bool GameDB::insert(GameRecord& rec)
 {
     const char* sql = R"(
-        INSERT INTO games (title, slug, platform, exe_path, zip_path, cover_path)
-        VALUES (?, ?, ?, ?, ?, ?);
+        INSERT INTO games (title, slug, platform, exe_path, zip_path, cover_path,
+                           confidence, source, needs_review)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);
     )";
 
     sqlite3_stmt* stmt = nullptr;
@@ -130,12 +145,15 @@ bool GameDB::insert(GameRecord& rec)
         return false;
     }
 
-    sqlite3_bind_text(stmt, 1, rec.title.c_str(),      -1, SQLITE_TRANSIENT);
-    sqlite3_bind_text(stmt, 2, rec.slug.c_str(),       -1, SQLITE_TRANSIENT);
-    sqlite3_bind_text(stmt, 3, rec.platform.c_str(),   -1, SQLITE_TRANSIENT);
-    sqlite3_bind_text(stmt, 4, rec.exe_path.c_str(),   -1, SQLITE_TRANSIENT);
-    sqlite3_bind_text(stmt, 5, rec.zip_path.c_str(),   -1, SQLITE_TRANSIENT);
-    sqlite3_bind_text(stmt, 6, rec.cover_path.c_str(), -1, SQLITE_TRANSIENT);
+    sqlite3_bind_text  (stmt, 1, rec.title.c_str(),      -1, SQLITE_TRANSIENT);
+    sqlite3_bind_text  (stmt, 2, rec.slug.c_str(),       -1, SQLITE_TRANSIENT);
+    sqlite3_bind_text  (stmt, 3, rec.platform.c_str(),   -1, SQLITE_TRANSIENT);
+    sqlite3_bind_text  (stmt, 4, rec.exe_path.c_str(),   -1, SQLITE_TRANSIENT);
+    sqlite3_bind_text  (stmt, 5, rec.zip_path.c_str(),   -1, SQLITE_TRANSIENT);
+    sqlite3_bind_text  (stmt, 6, rec.cover_path.c_str(), -1, SQLITE_TRANSIENT);
+    sqlite3_bind_double(stmt, 7, rec.confidence);
+    sqlite3_bind_text  (stmt, 8, rec.source.c_str(),     -1, SQLITE_TRANSIENT);
+    sqlite3_bind_int   (stmt, 9, rec.needs_review);
 
     bool ok = (sqlite3_step(stmt) == SQLITE_DONE);
     if (ok) {
@@ -148,14 +166,15 @@ bool GameDB::insert(GameRecord& rec)
     return ok;
 }
 
-// ── getAll ────────────────────────────────────────────────────────────────────
+// -- getAll --------------------------------------------------------------------
 
 std::vector<GameRecord> GameDB::getAll()
 {
     std::vector<GameRecord> results;
     const char* sql = R"(
         SELECT id, title, slug, platform, exe_path, zip_path,
-               cover_path, added_at, last_played, play_count
+               cover_path, added_at, last_played, play_count,
+               confidence, source, needs_review
         FROM games
         ORDER BY title COLLATE NOCASE ASC;
     )";
@@ -174,13 +193,14 @@ std::vector<GameRecord> GameDB::getAll()
     return results;
 }
 
-// ── getBySlug ─────────────────────────────────────────────────────────────────
+// -- getBySlug -----------------------------------------------------------------
 
 std::optional<GameRecord> GameDB::getBySlug(const std::string& slug)
 {
     const char* sql = R"(
         SELECT id, title, slug, platform, exe_path, zip_path,
-               cover_path, added_at, last_played, play_count
+               cover_path, added_at, last_played, play_count,
+               confidence, source, needs_review
         FROM games WHERE slug = ? LIMIT 1;
     )";
 
@@ -198,13 +218,14 @@ std::optional<GameRecord> GameDB::getBySlug(const std::string& slug)
     return result;
 }
 
-// ── getById ───────────────────────────────────────────────────────────────────
+// -- getById -------------------------------------------------------------------
 
 std::optional<GameRecord> GameDB::getById(int id)
 {
     const char* sql = R"(
         SELECT id, title, slug, platform, exe_path, zip_path,
-               cover_path, added_at, last_played, play_count
+               cover_path, added_at, last_played, play_count,
+               confidence, source, needs_review
         FROM games WHERE id = ? LIMIT 1;
     )";
 
@@ -222,7 +243,7 @@ std::optional<GameRecord> GameDB::getById(int id)
     return result;
 }
 
-// ── remove ────────────────────────────────────────────────────────────────────
+// -- remove --------------------------------------------------------------------
 
 bool GameDB::remove(int id)
 {
@@ -239,7 +260,7 @@ bool GameDB::remove(int id)
     return ok;
 }
 
-// ── recordPlay ────────────────────────────────────────────────────────────────
+// -- recordPlay ----------------------------------------------------------------
 
 bool GameDB::recordPlay(int id)
 {
@@ -260,7 +281,7 @@ bool GameDB::recordPlay(int id)
     return ok;
 }
 
-// ── count ─────────────────────────────────────────────────────────────────────
+// -- count ---------------------------------------------------------------------
 
 int GameDB::count()
 {
@@ -277,7 +298,7 @@ int GameDB::count()
     return n;
 }
 
-// ── Save state tracking ───────────────────────────────────────────────────────
+// -- Save state tracking -------------------------------------------------------
 
 bool GameDB::recordSave(int gameId)
 {
