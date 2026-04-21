@@ -5,6 +5,11 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
+# Static link the VC++ runtime so users don't need vc_redist installed
+if(MSVC)
+    set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+endif()
+
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
@@ -68,10 +73,11 @@ if(WIN32)
     add_executable(AutoDOS2 WIN32
         src/main.cpp src/app.cpp src/app.h
         src/gamedb.cpp src/gamedb.h
-    src/ingest.cpp src/ingest.h
-    src/settings.cpp src/settings.h
-    src/artfetcher.cpp src/artfetcher.h
+        src/ingest.cpp src/ingest.h
+        src/settings.cpp src/settings.h
+        src/artfetcher.cpp src/artfetcher.h
         src/platform.cpp src/platform.h
+        src/autodos2.rc
     )
 else()
     add_executable(AutoDOS2
