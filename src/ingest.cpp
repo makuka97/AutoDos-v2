@@ -619,7 +619,23 @@ bool Ingestor::writeDosboxConf(const fs::path& extractedDir,
     fs::create_directories(m_confsRoot);
 
     fs::path confPath = m_confsRoot / (result.slug + ".conf");
-    if (fs::exists(confPath)) return true;
+    if (fs::exists(confPath)) {
+        // Only skip if existing conf was written with equal or higher confidence.
+        // Low-confidence confs can be overwritten when a better match is found.
+        std::ifstream existing(confPath);
+        std::string firstLine;
+        std::getline(existing, firstLine);
+        if (firstLine.rfind("# confidence=", 0) == 0) {
+            try {
+                float stored = std::stof(firstLine.substr(13));
+                if (stored >= result.confidence) return true;
+                // New match is better -- fall through and rewrite
+            } catch (...) { return true; }
+        } else {
+            // No confidence header -- legacy conf, keep it (user may have edited)
+            return true;
+        }
+    }
 
     std::string cycles  = result.cycles.empty() ? "max limit 80000" : result.cycles;
     int         memsize = result.memsize > 0 ? result.memsize : 16;
@@ -701,8 +717,9 @@ bool Ingestor::writeDosboxConf(const fs::path& extractedDir,
     }
     autoexec << "exit\r\n";
 
-    // Write conf
+    // Write conf -- prepend confidence header so we can detect and overwrite low-confidence confs
     std::ostringstream conf;
+    conf << "# confidence=" << result.confidence << "\r\n";
     conf << "[sdl]\r\nfullscreen=true\r\nfullresolution=desktop\r\noutput=opengl\r\n\r\n";
     conf << "[dosbox]\r\nmachine=svga_s3\r\nmemsize=" << memsize << "\r\n\r\n";
     conf << "[cpu]\r\ncore=auto\r\ncputype=auto\r\ncycles=" << cycles << "\r\n";
