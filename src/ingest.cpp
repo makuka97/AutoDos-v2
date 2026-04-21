@@ -403,7 +403,10 @@ AnalyzeResult Ingestor::analyze(const fs::path& archivePath) const
         return result;
     }
 
-    std::vector<std::string> exeNames;
+    // A3: Track depth so shallow exes (game launchers) are preferred over deep ones
+    struct ListedExe { std::string name; int depth; };
+    std::vector<ListedExe> listedExes;
+
     std::istringstream ss(listing);
     std::string line, currentPath;
     bool isDir = false;
@@ -415,8 +418,10 @@ AnalyzeResult Ingestor::analyze(const fs::path& archivePath) const
         size_t sl = fname.rfind('/');
         if (sl != std::string::npos) fname = fname.substr(sl + 1);
         std::string ext = fname.size() > 4 ? toUpper(fname.substr(fname.size() - 3)) : "";
-        if (ext == "EXE" || ext == "COM" || ext == "BAT")
-            exeNames.push_back(toUpper(fname));
+        if (ext == "EXE" || ext == "COM" || ext == "BAT") {
+            int depth = (int)std::count(currentPath.begin(), currentPath.end(), '/');
+            listedExes.push_back({toUpper(fname), depth});
+        }
         currentPath.clear(); isDir = false;
     };
 
@@ -434,6 +439,10 @@ AnalyzeResult Ingestor::analyze(const fs::path& archivePath) const
     }
     commit();
 
+    // Build flat exe list for ScummVM check and fallback scoring
+    std::vector<std::string> exeNames;
+    for (auto& le : listedExes) exeNames.push_back(le.name);
+
     if (exeNames.empty()) {
         result.error = "No executable files found in archive";
         return result;
@@ -448,56 +457,72 @@ AnalyzeResult Ingestor::analyze(const fs::path& archivePath) const
     }
 
     if (m_db) {
-        // Match 1: exe filename
-        // Skip exe stems shorter than 3 chars -- too ambiguous (e.g. SC.EXE, OP.EXE)
-        for (const auto& exeName : exeNames) {
-            std::string stemLo = toLower(exeName.substr(0, exeName.rfind('.')));
-            if (isBlacklisted(stemLo)) continue;
-            if (stemLo.size() < 3) continue;
-            const GameEntry* entry = m_db->byExe(exeName);
-            if (entry) {
-                result.success      = true;
-                result.slug         = entry->slug;
-                result.title        = entry->title;
-                result.exe          = entry->exe;
-                result.workDir      = entry->workDir;
-                result.cycles       = entry->cycles;
-                result.memsize      = entry->memsize;
-                result.ems          = entry->ems;
-                result.xms          = entry->xms;
-                result.cdMount      = entry->cdMount;
-                result.installFirst = entry->installFirst;
-                result.source       = "exe_match";
-                result.confidence   = 1.0f;
-                result.gameType     = entry->cdMount ? "CD_BASED" : "SIMPLE";
-                return result;
+        // Match 1: depth-aware exe match
+        // Pass 1: shallow exes (depth <= 1) -- overwhelmingly the real game launcher
+        // Pass 2: any depth -- catches games nested deeper
+        for (int pass = 0; pass < 2; pass++) {
+            for (auto& le : listedExes) {
+                if (pass == 0 && le.depth > 1) continue;
+                std::string stemLo = toLower(le.name.substr(0, le.name.rfind('.')));
+                if (isBlacklisted(stemLo) || stemLo.size() < 3) continue;
+                const GameEntry* entry = m_db->byExe(le.name);
+                if (entry) {
+                    result.success      = true;
+                    result.slug         = entry->slug;
+                    result.title        = entry->title;
+                    result.exe          = entry->exe;
+                    result.workDir      = entry->workDir;
+                    result.cycles       = entry->cycles;
+                    result.memsize      = entry->memsize;
+                    result.ems          = entry->ems;
+                    result.xms          = entry->xms;
+                    result.cdMount      = entry->cdMount;
+                    result.installFirst = entry->installFirst;
+                    result.source       = (pass == 0) ? "exe_match_shallow" : "exe_match_deep";
+                    result.confidence   = (pass == 0) ? 1.0f : 0.7f;
+                    result.gameType     = entry->cdMount ? "CD_BASED" : "SIMPLE";
+                    return result;
+                }
             }
         }
 
-        // Match 2: slug from archive name
+        // Match 2: iterative slug normalization
+        // Keep stripping noise suffixes and years until stable, then bySlug
         std::string archiveStem = archivePath.stem().string();
         std::string slug        = slugify(archiveStem);
         const GameEntry* entry  = m_db->bySlug(slug);
 
-        // Try stripping noise suffixes: _dos_win, _dos, _win, etc.
         if (!entry) {
-            std::string stripped = stripNoiseSuffix(slug);
+            // Iteratively strip noise until nothing changes
+            std::string stripped = slug;
+            bool changed = true;
+            while (changed) {
+                changed = false;
+                // Strip 4-digit trailing year
+                if (stripped.size() > 4) {
+                    bool isYear = true;
+                    for (int i = 1; i <= 4; i++)
+                        if (!std::isdigit((unsigned char)stripped[stripped.size()-i]))
+                            { isYear = false; break; }
+                    if (isYear) { stripped = stripped.substr(0, stripped.size()-4); changed = true; continue; }
+                }
+                // Strip noise suffixes
+                static const std::vector<std::string> TAILS = {
+                    "doswin","dosxp","dos","win","cd","hdd","gog","rip",
+                    "en","pc","v1","v2","v3","v4","v5","demo","shareware",
+                    "floppy","patched","cracked","nocd","ost","plus","deluxe"
+                };
+                for (auto& t : TAILS) {
+                    if (stripped.size() > t.size() &&
+                        stripped.substr(stripped.size()-t.size()) == t) {
+                        stripped = stripped.substr(0, stripped.size()-t.size());
+                        changed = true; break;
+                    }
+                }
+            }
             if (stripped != slug) {
                 entry = m_db->bySlug(stripped);
                 if (entry) slug = stripped;
-            }
-        }
-
-        // Try stripping trailing year
-        if (!entry && slug.size() > 4) {
-            bool hasYear = true;
-            for (int i = 0; i < 4; i++)
-                if (!std::isdigit((unsigned char)slug[slug.size()-1-i]))
-                    { hasYear = false; break; }
-            if (hasYear) {
-                std::string noYear = slug.substr(0, slug.size() - 4);
-                entry = m_db->bySlug(noYear);
-                if (entry) slug = noYear;
             }
         }
 
@@ -566,13 +591,14 @@ AnalyzeResult Ingestor::analyze(const fs::path& archivePath) const
         result.slug       = slugify(archiveStem);
         result.title      = archiveStem;
         result.exe        = scored[0].second;
-        result.cycles     = "max limit 80000";
+        result.cycles     = "auto";
         result.memsize    = 16;
         result.ems        = true;
         result.xms        = true;
         result.source     = "scored";
-        result.confidence = 0.5f;
+        result.confidence = 0.35f;
         result.gameType   = "SIMPLE";
+        result.needsReview = true;
         return result;
     }
 
@@ -816,6 +842,7 @@ AnalyzeResult Ingestor::ingestFolder(const fs::path& folderPath)
         result.title      = folderName;
         result.source     = "unmatched";
         result.confidence = 0.0f;
+        result.needsReview = true;
         result.cdMount    = !isoFiles.empty();
         auto candidates   = scanExtractedDir(folderPath, folderName);
         if (!candidates.empty()) result.exe = candidates[0].name;

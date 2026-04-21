@@ -31,8 +31,9 @@ struct AnalyzeResult {
     bool        installFirst = false;
 
     // Match quality
-    std::string source;        // "exe_match" | "slug_match" | "scored" | "unknown"
-    float       confidence = 0.0f;
+    std::string source;        // "exe_match_shallow" | "exe_match_deep" | "slug_match" | "title_match" | "scored"
+    float       confidence   = 0.0f;
+    bool        needsReview  = false;  // true when confidence < 0.5 -- show warning badge
 };
 
 // ── GameEntry — one row from games.json ──────────────────────────────────────
