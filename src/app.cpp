@@ -78,7 +78,7 @@ static void applyAutoDOSTheme()
     c[ImGuiCol_TabActive]            = {0.125f, 0.204f, 0.157f, 1.00f};
 }
 
-// ── CoverCache ────────────────────────────────────────────────────────────────
+// -- CoverCache ----------------------------------------------------------------
 
 CoverCache::~CoverCache() { clear(); }
 
@@ -127,7 +127,7 @@ void CoverCache::clear()
     if (m_placeholder) { SDL_DestroyTexture(m_placeholder); m_placeholder=nullptr; }
 }
 
-// ── App ───────────────────────────────────────────────────────────────────────
+// -- App -----------------------------------------------------------------------
 
 App::App()  = default;
 App::~App() { cleanup(); }
@@ -156,7 +156,7 @@ bool App::init()
     io2.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
     io2.IniFilename  = nullptr;
 
-    // Load default font — bigger, bolder, cleaner
+    // Load default font -- bigger, bolder, cleaner
     ImFontConfig fontCfg;
     fontCfg.SizePixels    = 17.0f;
     fontCfg.OversampleH   = 3;
@@ -265,12 +265,15 @@ void App::startIngest(const std::string& path)
         if (res.success) {
             setMsg("Adding to library...");
             GameRecord rec;
-            rec.title      = res.title;
-            rec.slug       = res.slug;
-            rec.platform   = "DOS";
-            rec.exe_path   = res.exe;
-            rec.zip_path   = path;
-            rec.cover_path = (getDataDir() / "art" / (res.slug + ".jpg")).string();
+            rec.title        = res.title;
+            rec.slug         = res.slug;
+            rec.platform     = "DOS";
+            rec.exe_path     = res.exe;
+            rec.zip_path     = path;
+            rec.cover_path   = (getDataDir() / "art" / (res.slug + ".jpg")).string();
+            rec.confidence   = res.confidence;
+            rec.source       = res.source;
+            rec.needs_review = res.needsReview ? 1 : 0;
             if (!m_db.getBySlug(res.slug).has_value())
                 m_db.insert(rec);
 
@@ -291,7 +294,7 @@ void App::startIngest(const std::string& path)
     });
 }
 
-// ── startIngestFolder ────────────────────────────────────────────────────────
+// -- startIngestFolder --------------------------------------------------------
 
 void App::startIngestFolder(const std::string& folderPath)
 {
@@ -315,12 +318,15 @@ void App::startIngestFolder(const std::string& folderPath)
         if (res.success) {
             setMsg("Adding to library...");
             GameRecord rec;
-            rec.title      = res.title;
-            rec.slug       = res.slug;
-            rec.platform   = "DOS";
-            rec.exe_path   = res.exe;
-            rec.zip_path   = folderPath;
-            rec.cover_path = (getDataDir() / "art" / (res.slug + ".jpg")).string();
+            rec.title        = res.title;
+            rec.slug         = res.slug;
+            rec.platform     = "DOS";
+            rec.exe_path     = res.exe;
+            rec.zip_path     = folderPath;
+            rec.cover_path   = (getDataDir() / "art" / (res.slug + ".jpg")).string();
+            rec.confidence   = res.confidence;
+            rec.source       = res.source;
+            rec.needs_review = res.needsReview ? 1 : 0;
             if (!m_db.getBySlug(res.slug).has_value())
                 m_db.insert(rec);
             if (m_artFetcher.hasApiKey()) {
@@ -338,7 +344,7 @@ void App::startIngestFolder(const std::string& folderPath)
     });
 }
 
-// ── Loop ──────────────────────────────────────────────────────────────────────
+// -- Loop ----------------------------------------------------------------------
 
 void App::run()
 {
@@ -383,15 +389,15 @@ void App::render()
     SDL_RenderPresent(m_renderer);
 }
 
-// ── Layout ────────────────────────────────────────────────────────────────────
+// -- Layout --------------------------------------------------------------------
 //
-//  ┌─────────────────────────────────────────────────────┐
-//  │  Top bar: AutoDOS2  v0.9  |  N games  |  DB: N  [⚙] [Search...]  │
-//  ├──────────┬──────────────────────────────────────────┤
-//  │ Sidebar  │  Library header + 5-col card grid        │
-//  ├──────────┴──────────────────────────────────────────┤
-//  │  Launch | Add Zip | Delete       status      N fps  │
-//  └─────────────────────────────────────────────────────┘
+//  +-----------------------------------------------------+
+//  |  Top bar: AutoDOS2  v0.9  |  N games  |  DB: N  [*] [Search...]  |
+//  +----------+------------------------------------------?
+//  | Sidebar  |  Library header + 5-col card grid        |
+//  +----------?------------------------------------------?
+//  |  Launch | Add Zip | Delete       status      N fps  |
+//  +-----------------------------------------------------+
 
 void App::renderImGui()
 {
@@ -427,7 +433,7 @@ void App::renderImGui()
     if (m_showAbout)    renderAboutPanel();
 }
 
-// ── Top bar ───────────────────────────────────────────────────────────────────
+// -- Top bar -------------------------------------------------------------------
 
 void App::renderTopBar(float winW)
 {
@@ -449,7 +455,7 @@ void App::renderTopBar(float winW)
     const float gearW   = 28.0f;
     const float rightX  = winW - searchW - gearW - 28.0f;
 
-    // Gear button — simple cog drawn with DrawList
+    // Gear button -- simple cog drawn with DrawList
     ImGui::SetCursorPos({rightX, 12});
     ImGui::PushStyleColor(ImGuiCol_Button, ImVec4{0,0,0,0});
     ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4{0.2f,0.2f,0.25f,1.0f});
@@ -501,7 +507,7 @@ void App::renderTopBar(float winW)
     dl->AddLine(p,{p.x+winW,p.y},IM_COL32(45,45,58,255),1.0f);
 }
 
-// ── Sidebar ───────────────────────────────────────────────────────────────────
+// -- Sidebar -------------------------------------------------------------------
 
 void App::renderSidebar()
 {
@@ -594,7 +600,7 @@ void App::renderSidebar()
     ImGui::EndChild();
 }
 
-// ── Grid ──────────────────────────────────────────────────────────────────────
+// -- Grid ----------------------------------------------------------------------
 
 void App::renderGrid()
 {
@@ -647,12 +653,20 @@ void App::renderGrid()
             IM_COL32(0,0,0,0),IM_COL32(0,0,0,0),
             IM_COL32(0,0,0,230),IM_COL32(0,0,0,230));
 
-        // Title — use larger font size for card labels
+        // Title -- use larger font size for card labels
         ImFont* font = ImGui::GetFont();
         float fontSize = 15.0f;
         ImVec2 tp = {pos.x+8.0f, pos.y+imgH+(lblH-fontSize)*0.3f};
         dl->AddText(font, fontSize, tp, IM_COL32(255,255,255,255),
             g.title.c_str(), nullptr, CARD_W-10.0f);
+
+        // Yellow warning badge for low-confidence matches
+        if (g.needs_review) {
+            ImVec2 bp = {pos.x + CARD_W - 20.0f, pos.y + 6.0f};
+            dl->AddCircleFilled(bp, 8.0f, IM_COL32(255, 200, 0, 220));
+            dl->AddText(font, 11.0f, {bp.x - 3.0f, bp.y - 5.5f},
+                IM_COL32(0, 0, 0, 255), "?");
+        }
 
         if (sel)
             dl->AddRect(pos,{pos.x+CARD_W,pos.y+CARD_H},ACCENT32,10.0f,0,2.5f);
@@ -665,7 +679,7 @@ void App::renderGrid()
     if (m_filtered.empty()) {
         ImGui::SetCursorPosY(80);
         const char* msg = m_allGames.empty()
-            ? "No games yet — drag a DOS zip onto the window"
+            ? "No games yet -- drag a DOS zip onto the window"
             : "No games match your search";
         float tw = ImGui::CalcTextSize(msg).x;
         ImGui::SetCursorPosX((ImGui::GetContentRegionAvail().x-tw)*0.5f);
@@ -676,7 +690,7 @@ void App::renderGrid()
     ImGui::EndChild();
 }
 
-// ── Bottom bar ────────────────────────────────────────────────────────────────
+// -- Bottom bar ----------------------------------------------------------------
 
 void App::renderBottomBar(float winW)
 {
@@ -695,7 +709,7 @@ void App::renderBottomBar(float winW)
     const bool hasSel=(sel!=nullptr);
     const bool busy=m_ingest.busy.load();
 
-    // Launch — green
+    // Launch -- green
     ImGui::PushStyleColor(ImGuiCol_Button,       IM_COL32(28,68,42,255));
     ImGui::PushStyleColor(ImGuiCol_ButtonHovered, IM_COL32(60,160,90,255));
     ImGui::PushStyleColor(ImGuiCol_ButtonActive,  IM_COL32(100,220,140,255));
@@ -744,7 +758,7 @@ void App::renderBottomBar(float winW)
     ImGui::EndChild();
 }
 
-// ── Ingest overlay ────────────────────────────────────────────────────────────
+// -- Ingest overlay ------------------------------------------------------------
 
 void App::renderIngestOverlay()
 {
@@ -778,7 +792,7 @@ void App::renderIngestOverlay()
     ImGui::End();
 }
 
-// ── Launch ────────────────────────────────────────────────────────────────────
+// -- Launch --------------------------------------------------------------------
 
 void App::launchGame(const GameRecord& rec)
 {
@@ -855,7 +869,7 @@ void App::renderLaunchError()
     ImGui::End();
 }
 
-// ── Settings panel ────────────────────────────────────────────────────────────
+// -- Settings panel ------------------------------------------------------------
 
 void App::renderSettingsPanel()
 {
@@ -944,7 +958,7 @@ void App::renderSettingsPanel()
     ImGui::End();
 }
 
-// ── About panel ───────────────────────────────────────────────────────────────
+// -- About panel ---------------------------------------------------------------
 
 void App::renderAboutPanel()
 {
@@ -972,7 +986,7 @@ void App::renderAboutPanel()
     ImGui::End();
 }
 
-// ── Cleanup ───────────────────────────────────────────────────────────────────
+// -- Cleanup -------------------------------------------------------------------
 
 void App::cleanup()
 {
